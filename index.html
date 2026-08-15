@@ -207,6 +207,13 @@
       Pega aquí la URL de tu Web App de Google Apps Script (Extensiones &gt; Apps Script &gt;
       Implementar &gt; Nueva implementación &gt; Aplicación web &gt; copiar la URL que termina en <code>/exec</code>).
     </p>
+    <div class="config-box" style="margin-bottom:0">
+      ⚠️ Debe ser la URL que Apps Script te da en el diálogo de implementación
+      (formato <code>https://script.google.com/macros/s/XXXX/exec</code>).
+      <b>No</b> uses la URL que aparece en la barra del navegador después de
+      abrirla (esa es de vista previa, formato <code>script.googleusercontent.com/...</code>)
+      — con esa no va a conectar.
+    </div>
     <label>URL de Apps Script (API_URL)</label>
     <input type="text" id="inputApiUrl" placeholder="https://script.google.com/macros/s/XXXXXXXX/exec">
     <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
@@ -436,11 +443,16 @@ document.getElementById('cVencimiento').addEventListener('change', (e)=>{
   document.getElementById('cFechaVencWrap').style.display = e.target.checked ? 'block' : 'none';
 });
 
+function withQuery(url, params){
+  const sep = url.includes('?') ? '&' : '?';
+  return url + sep + params;
+}
+
 // ---------- API ----------
 async function apiGet(){
   const url = getApiUrl();
   if(!url) throw new Error('Falta configurar la URL de Apps Script');
-  const res = await fetch(url + '?action=getAll');
+  const res = await fetch(withQuery(url, 'action=getAll'));
   if(!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
 }
@@ -488,6 +500,15 @@ document.getElementById('btnGuardarApiUrl').addEventListener('click', async ()=>
   const val = document.getElementById('inputApiUrl').value.trim();
   const msg = document.getElementById('configMsg');
   if(!val || !val.startsWith('http')){ msg.style.color='var(--danger)'; msg.textContent='Pega una URL válida (empieza con https://)'; return; }
+  if(val.includes('googleusercontent.com')){
+    msg.style.color='var(--danger)';
+    msg.textContent = 'Esa es la URL de vista previa del navegador, no la URL de tu Web App. Usa la que Apps Script te dio en "Implementar > Nueva implementación" (empieza con https://script.google.com/macros/s/... y termina en /exec).';
+    return;
+  }
+  if(!val.includes('script.google.com') || !val.endsWith('/exec')){
+    msg.style.color='var(--warn)';
+    msg.textContent = 'Esta URL no tiene el formato típico (https://script.google.com/macros/s/XXXX/exec). Verifica que sea la correcta antes de continuar. Se guardará de todas formas.';
+  }
   setApiUrl(val);
   msg.style.color = 'var(--p5)';
   msg.textContent = 'Conectando…';
