@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Capacitación · Metelmex</title>
+<style>
+  :root{
+    --p1:#E5D7F5; /* lavanda claro */
+    --p2:#DD8FF2; /* orquídea */
+    --p3:#A94FE0; /* púrpura medio */
+    --p4:#8B0FE0; /* púrpura vivo (acento) */
+    --p5:#4A0468; /* morado oscuro (texto/fondo fuerte) */
+    --bg:#faf7fd;
+    --card:#ffffff;
+    --ink:#2c1338;
+    --ink-soft:#6b5a78;
+    --line:#e9def5;
+    --ok:#2e9e5b;
+    --warn:#c8850a;
+    --danger:#c8354a;
+    --radius:14px;
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1100px 500px at 100% -10%, rgba(139,15,224,.10), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(221,143,242,.16), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    min-height:100vh;
+  }
+  header{
+    background:linear-gradient(120deg,var(--p5) 0%,var(--p4) 55%,var(--p3) 100%);
+    color:#fff;
+    padding:22px clamp(16px,4vw,40px);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+    box-shadow:0 6px 24px rgba(74,4,104,.25);
+  }
+  header .brand{display:flex;flex-direction:column;gap:2px;}
+  header .brand small{
+    text-transform:uppercase;
+    letter-spacing:.14em;
+    font-size:11px;
+    opacity:.8;
+  }
+  header h1{margin:0;font-size:22px;font-weight:700;}
+  #statusDot{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:13px; background:rgba(255,255,255,.14);
+    padding:6px 12px;border-radius:999px;
+  }
+  #statusDot .dot{width:9px;height:9px;border-radius:50%;background:#ffb84d;}
+  #statusDot.online .dot{background:#4be08a;}
+  #statusDot.offline .dot{background:#ff6b6b;}
+
+  nav{
+    display:flex;gap:6px;padding:14px clamp(16px,4vw,40px) 0;
+    flex-wrap:wrap;
+  }
+  nav button{
+    border:none;background:transparent;color:var(--ink-soft);
+    padding:10px 18px;border-radius:10px 10px 0 0;
+    font-size:14px;font-weight:600;cursor:pointer;
+    border-bottom:3px solid transparent;
+  }
+  nav button.active{
+    color:var(--p5);
+    background:var(--card);
+    border-bottom-color:var(--p4);
+  }
+
+  main{padding:0 clamp(16px,4vw,40px) 60px;max-width:1280px;margin:0 auto;}
+  .view{display:none;background:var(--card);border-radius:0 var(--radius) var(--radius) var(--radius);
+    padding:26px;box-shadow:0 10px 30px rgba(74,4,104,.06);border:1px solid var(--line);}
+  .view.active{display:block;}
+
+  .alert-banner{
+    display:flex;align-items:flex-start;gap:12px;
+    background:linear-gradient(120deg,#fff3e2,#fff9ef);
+    border:1px solid #f3d9a6;color:#7a5306;
+    padding:14px 18px;border-radius:12px;margin-bottom:20px;
+  }
+  .alert-banner b{display:block;margin-bottom:4px;}
+  .alert-banner ul{margin:6px 0 0;padding-left:18px;}
+  .alert-banner.hidden{display:none;}
+
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin-bottom:24px;}
+  .kpi{
+    background:linear-gradient(160deg,#fff,#f8f1fd);
+    border:1px solid var(--line);border-radius:var(--radius);
+    padding:18px 20px;
+  }
+  .kpi .num{font-size:30px;font-weight:800;color:var(--p5);line-height:1;}
+  .kpi .label{font-size:12.5px;color:var(--ink-soft);margin-top:6px;text-transform:uppercase;letter-spacing:.05em;}
+
+  h2{margin-top:0;color:var(--p5);font-size:19px;}
+  .section-sub{color:var(--ink-soft);font-size:13.5px;margin:-8px 0 18px;}
+
+  .grid-2{display:grid;grid-template-columns:1.1fr 1.4fr;gap:24px;}
+  @media (max-width:920px){.grid-2{grid-template-columns:1fr;}}
+
+  label{display:block;font-size:13px;font-weight:600;color:var(--ink);margin:14px 0 6px;}
+  input[type=text],input[type=number],input[type=date],select,textarea{
+    width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:9px;
+    font-size:14px;background:#fdfbfe;color:var(--ink);
+  }
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--p3);}
+  .row{display:flex;gap:14px;flex-wrap:wrap;}
+  .row > div{flex:1;min-width:150px;}
+  .checkbox-line{display:flex;align-items:center;gap:8px;margin-top:16px;}
+  .checkbox-line input{width:auto;}
+  .checkbox-line label{margin:0;}
+
+  .btn{
+    border:none;border-radius:9px;padding:10px 18px;font-weight:700;font-size:14px;
+    cursor:pointer;transition:transform .05s ease;
+  }
+  .btn:active{transform:scale(.97);}
+  .btn-primary{background:linear-gradient(120deg,var(--p4),var(--p3));color:#fff;}
+  .btn-ghost{background:#f3e9fb;color:var(--p5);}
+  .btn-danger{background:#fdeaec;color:var(--danger);}
+  .btn-sm{padding:6px 12px;font-size:12.5px;border-radius:7px;}
+
+  .emp-picker{
+    border:1.5px solid var(--line);border-radius:10px;padding:10px;
+    max-height:230px;overflow-y:auto;background:#fdfbfe;
+  }
+  .emp-picker input[type=text]{margin-bottom:8px;}
+  .emp-opt{display:flex;align-items:center;gap:8px;padding:5px 4px;border-radius:6px;font-size:13.5px;}
+  .emp-opt:hover{background:var(--p1);}
+  .emp-opt input{width:auto;}
+  .emp-count{font-size:12px;color:var(--ink-soft);margin-top:6px;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  th{
+    text-align:left;color:#fff;background:var(--p5);
+    padding:10px 12px;font-weight:600;position:sticky;top:0;
+  }
+  th:first-child{border-radius:8px 0 0 0;}
+  th:last-child{border-radius:0 8px 0 0;}
+  td{padding:10px 12px;border-bottom:1px solid var(--line);}
+  tr:hover td{background:#faf3fe;}
+  .table-wrap{overflow-x:auto;max-height:480px;overflow-y:auto;border-radius:10px;border:1px solid var(--line);}
+
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11.5px;font-weight:700;}
+  .badge-ok{background:#e3f7ea;color:var(--ok);}
+  .badge-warn{background:#fff2dc;color:var(--warn);}
+  .badge-danger{background:#fde5e8;color:var(--danger);}
+  .badge-neutral{background:#eee3f7;color:var(--p5);}
+
+  .muted{color:var(--ink-soft);}
+  .toast{
+    position:fixed;bottom:22px;right:22px;background:var(--p5);color:#fff;
+    padding:12px 20px;border-radius:10px;font-size:13.5px;box-shadow:0 8px 24px rgba(0,0,0,.25);
+    opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none;z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateY(0);}
+  .toast.error{background:var(--danger);}
+
+  .config-box{
+    background:#f7f0fc;border:1px dashed var(--p3);border-radius:10px;padding:14px 16px;margin-bottom:18px;
+    font-size:13px;color:var(--p5);
+  }
+  .config-box code{background:#fff;padding:2px 6px;border-radius:5px;}
+  .empty-state{text-align:center;padding:40px 20px;color:var(--ink-soft);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <small>Metelmex · Recursos Humanos</small>
+    <h1>📚 Dashboard de Capacitación</h1>
+  </div>
+  <span id="statusDot"><span class="dot"></span><span id="statusText">Conectando…</span></span>
+</header>
+
+<nav>
+  <button class="tab-btn active" data-view="dashboard">Resumen</button>
+  <button class="tab-btn" data-view="cursos">Registrar curso</button>
+  <button class="tab-btn" data-view="listaCursos">Cursos</button>
+  <button class="tab-btn" data-view="empleados">Empleados y horas</button>
+</nav>
+
+<main>
+
+  <!-- RESUMEN -->
+  <section id="view-dashboard" class="view active">
+    <div id="alertBanner" class="alert-banner hidden">
+      <div>⏰</div>
+      <div>
+        <b>Cursos por vencer en menos de 30 días</b>
+        <ul id="alertList"></ul>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><div class="num" id="kpiCursos">0</div><div class="label">Cursos registrados</div></div>
+      <div class="kpi"><div class="num" id="kpiEmpleados">0</div><div class="label">Empleados en catálogo</div></div>
+      <div class="kpi"><div class="num" id="kpiHoras">0</div><div class="label">Horas de capacitación acumuladas</div></div>
+      <div class="kpi"><div class="num" id="kpiPorVencer">0</div><div class="label">Cursos por vencer (30 días)</div></div>
+    </div>
+
+    <h2>Últimos cursos registrados</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Curso</th><th>Fecha</th><th>Duración (hrs)</th><th>Vencimiento</th><th>Participantes</th></tr></thead>
+        <tbody id="tblResumen"><tr><td colspan="5" class="empty-state">Sin datos aún</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- REGISTRAR CURSO -->
+  <section id="view-cursos" class="view">
+    <h2>Registrar curso de capacitación</h2>
+    <p class="section-sub">Captura el curso, marca si tiene vencimiento y selecciona a los empleados que participaron. Al guardar, las horas se acumulan automáticamente en cada empleado.</p>
+
+    <div class="grid-2">
+      <div>
+        <label>Nombre del curso</label>
+        <input type="text" id="cNombre" placeholder="Ej. Seguridad e higiene NOM-035">
+
+        <div class="row">
+          <div>
+            <label>Fecha en que se impartió</label>
+            <input type="date" id="cFecha">
+          </div>
+          <div>
+            <label>Duración (horas)</label>
+            <input type="number" id="cDuracion" min="0" step="0.5" placeholder="Ej. 8">
+          </div>
+        </div>
+
+        <div class="checkbox-line">
+          <input type="checkbox" id="cVencimiento">
+          <label for="cVencimiento" style="margin:0">Este curso tiene vencimiento / requiere reentrenamiento</label>
+        </div>
+
+        <div id="cFechaVencWrap" style="display:none">
+          <label>Fecha de vencimiento</label>
+          <input type="date" id="cFechaVenc">
+        </div>
+
+        <div style="margin-top:22px">
+          <button class="btn btn-primary" id="btnGuardarCurso">Guardar curso</button>
+        </div>
+      </div>
+
+      <div>
+        <label>Empleados que participaron</label>
+        <div class="emp-picker">
+          <input type="text" id="empBuscar" placeholder="🔍 Buscar empleado…">
+          <div id="empListaPicker"></div>
+        </div>
+        <div class="emp-count"><span id="empSeleccionados">0</span> empleado(s) seleccionado(s)</div>
+
+        <details style="margin-top:16px">
+          <summary style="cursor:pointer;color:var(--p5);font-weight:600;font-size:13.5px">+ Agregar nuevo empleado al catálogo</summary>
+          <div style="margin-top:10px">
+            <label>Nombre</label>
+            <input type="text" id="nEmpNombre" placeholder="Nombre completo">
+            <div class="row">
+              <div><label>Puesto</label><input type="text" id="nEmpPuesto"></div>
+              <div><label>Departamento</label><input type="text" id="nEmpDepto"></div>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="margin-top:12px" id="btnAddEmpleado">Agregar empleado</button>
+          </div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- LISTA DE CURSOS -->
+  <section id="view-listaCursos" class="view">
+    <h2>Cursos registrados</h2>
+    <p class="section-sub">Estado de vencimiento y participantes por curso.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Curso</th><th>Fecha impartición</th><th>Duración</th><th>Vencimiento</th><th>Estado</th><th>Participantes</th><th></th></tr></thead>
+        <tbody id="tblCursos"><tr><td colspan="7" class="empty-state">Sin cursos registrados</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- EMPLEADOS Y HORAS -->
+  <section id="view-empleados" class="view">
+    <h2>Empleados y horas acumuladas</h2>
+    <p class="section-sub">Total de horas de capacitación por empleado según los cursos en los que ha participado.</p>
+    <input type="text" id="empBuscarTabla" placeholder="🔍 Buscar empleado…" style="max-width:320px;margin-bottom:14px">
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Empleado</th><th>Puesto</th><th>Departamento</th><th>Cursos tomados</th><th>Horas acumuladas</th><th></th></tr></thead>
+        <tbody id="tblEmpleados"><tr><td colspan="6" class="empty-state">Sin empleados en catálogo</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   CONFIGURACIÓN — pega aquí la URL de tu Web App de Apps Script
+   (Implementar > Nueva implementación > Aplicación web > Copiar URL)
+   ========================================================= */
+const API_URL = "PEGA_AQUI_TU_URL_DE_APPS_SCRIPT";
+
+let STATE = { empleados: [], cursos: [], participaciones: [] };
+let seleccionEmpleados = new Set();
+
+// ---------- utilidades ----------
+function toast(msg, isError){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(()=> t.className = 'toast', 2600);
+}
+function daysUntil(dateStr){
+  if(!dateStr) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const d = new Date(dateStr); d.setHours(0,0,0,0);
+  return Math.round((d - today) / 86400000);
+}
+function fmtDate(s){
+  if(!s) return '—';
+  const d = new Date(s);
+  if(isNaN(d)) return s;
+  return d.toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'});
+}
+function setStatus(online){
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'online';
+  if(online){ dot.classList.add('online'); txt.textContent = 'Conectado a Google Sheets'; }
+  else { dot.classList.remove('online'); dot.classList.add('offline'); txt.textContent = 'Sin conexión — revisa API_URL'; }
+}
+
+// ---------- navegación ----------
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('view-'+btn.dataset.view).classList.add('active');
+  });
+});
+
+document.getElementById('cVencimiento').addEventListener('change', (e)=>{
+  document.getElementById('cFechaVencWrap').style.display = e.target.checked ? 'block' : 'none';
+});
+
+// ---------- API ----------
+async function apiGet(){
+  const res = await fetch(API_URL + '?action=getAll');
+  if(!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+async function apiPost(payload){
+  const res = await fetch(API_URL, {
+    method: 'POST',
+    headers: {'Content-Type': 'text/plain;charset=utf-8'}, // evita preflight CORS en Apps Script
+    body: JSON.stringify(payload)
+  });
+  const json = await res.json();
+  if(json.success === false) throw new Error(json.error || 'Error desconocido');
+  return json;
+}
+
+async function cargarDatos(){
+  try{
+    const data = await apiGet();
+    STATE = data;
+    setStatus(true);
+    render();
+  }catch(err){
+    console.error(err);
+    setStatus(false);
+    toast('No se pudo conectar con Google Sheets. Revisa API_URL en index.html', true);
+  }
+}
+
+// ---------- render ----------
+function render(){
+  renderPicker();
+  renderResumen();
+  renderCursos();
+  renderEmpleadosTabla();
+}
+
+function horasDe(empleadoId){
+  return STATE.participaciones
+    .filter(p => String(p.EmpleadoID) === String(empleadoId))
+    .reduce((s,p)=> s + (Number(p.DuracionHoras)||0), 0);
+}
+function cursosDe(empleadoId){
+  return STATE.participaciones.filter(p => String(p.EmpleadoID) === String(empleadoId));
+}
+function participantesDe(cursoId){
+  return STATE.participaciones.filter(p => String(p.CursoID) === String(cursoId));
+}
+
+function estadoVencimiento(curso){
+  if(curso.TieneVencimiento !== 'SI') return {label:'Sin vencimiento', cls:'badge-neutral'};
+  const d = daysUntil(curso.FechaVencimiento);
+  if(d === null) return {label:'Sin fecha', cls:'badge-neutral'};
+  if(d < 0) return {label:'Vencido', cls:'badge-danger'};
+  if(d <= 30) return {label:'Por vencer (' + d + ' días)', cls:'badge-warn'};
+  return {label:'Vigente', cls:'badge-ok'};
+}
+
+function renderResumen(){
+  document.getElementById('kpiCursos').textContent = STATE.cursos.length;
+  document.getElementById('kpiEmpleados').textContent = STATE.empleados.length;
+  const totalHoras = STATE.participaciones.reduce((s,p)=> s + (Number(p.DuracionHoras)||0), 0);
+  document.getElementById('kpiHoras').textContent = totalHoras.toFixed(1).replace(/\.0$/,'');
+
+  const porVencer = STATE.cursos.filter(c => c.TieneVencimiento === 'SI' && daysUntil(c.FechaVencimiento) !== null && daysUntil(c.FechaVencimiento) <= 30 && daysUntil(c.FechaVencimiento) >= 0);
+  document.getElementById('kpiPorVencer').textContent = porVencer.length;
+
+  const banner = document.getElementById('alertBanner');
+  const list = document.getElementById('alertList');
+  if(porVencer.length){
+    banner.classList.remove('hidden');
+    list.innerHTML = porVencer.map(c => `<li><b>${escapeHtml(c.Nombre)}</b> — vence el ${fmtDate(c.FechaVencimiento)} (${daysUntil(c.FechaVencimiento)} días)</li>`).join('');
+  } else {
+    banner.classList.add('hidden');
+  }
+
+  const ordenados = [...STATE.cursos].sort((a,b) => new Date(b.FechaRegistro||b.FechaImparticion) - new Date(a.FechaRegistro||a.FechaImparticion)).slice(0,8);
+  const tbody = document.getElementById('tblResumen');
+  if(!ordenados.length){ tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Sin datos aún</td></tr>'; return; }
+  tbody.innerHTML = ordenados.map(c=>{
+    const est = estadoVencimiento(c);
+    return `<tr>
+      <td>${escapeHtml(c.Nombre)}</td>
+      <td>${fmtDate(c.FechaImparticion)}</td>
+      <td>${c.DuracionHoras}</td>
+      <td><span class="badge ${est.cls}">${est.label}</span></td>
+      <td>${participantesDe(c.ID).length}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderCursos(){
+  const tbody = document.getElementById('tblCursos');
+  if(!STATE.cursos.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Sin cursos registrados</td></tr>'; return; }
+  const ordenados = [...STATE.cursos].sort((a,b)=> new Date(b.FechaImparticion) - new Date(a.FechaImparticion));
+  tbody.innerHTML = ordenados.map(c=>{
+    const est = estadoVencimiento(c);
+    const parts = participantesDe(c.ID);
+    const nombres = parts.map(p=>p.EmpleadoNombre).join(', ') || '—';
+    return `<tr>
+      <td>${escapeHtml(c.Nombre)}</td>
+      <td>${fmtDate(c.FechaImparticion)}</td>
+      <td>${c.DuracionHoras} hrs</td>
+      <td>${c.TieneVencimiento === 'SI' ? fmtDate(c.FechaVencimiento) : '—'}</td>
+      <td><span class="badge ${est.cls}">${est.label}</span></td>
+      <td title="${escapeHtml(nombres)}">${parts.length} participante(s)</td>
+      <td><button class="btn btn-danger btn-sm" onclick="eliminarCurso('${c.ID}')">Eliminar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function renderEmpleadosTabla(){
+  const filtro = (document.getElementById('empBuscarTabla').value || '').toLowerCase();
+  const tbody = document.getElementById('tblEmpleados');
+  const lista = STATE.empleados.filter(e => e.Nombre.toLowerCase().includes(filtro));
+  if(!lista.length){ tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Sin empleados en catálogo</td></tr>'; return; }
+  tbody.innerHTML = lista.map(e=>{
+    const horas = horasDe(e.ID);
+    const cursos = cursosDe(e.ID);
+    const nombresCursos = cursos.map(c=>c.CursoNombre).join(', ') || 'Ninguno aún';
+    return `<tr>
+      <td>${escapeHtml(e.Nombre)}</td>
+      <td>${escapeHtml(e.Puesto||'—')}</td>
+      <td>${escapeHtml(e.Departamento||'—')}</td>
+      <td title="${escapeHtml(nombresCursos)}">${cursos.length}</td>
+      <td><b>${horas.toFixed(1).replace(/\.0$/,'')}</b> hrs</td>
+      <td><button class="btn btn-danger btn-sm" onclick="eliminarEmpleado('${e.ID}')">Eliminar</button></td>
+    </tr>`;
+  }).join('');
+}
+document.getElementById('empBuscarTabla').addEventListener('input', renderEmpleadosTabla);
+
+function renderPicker(){
+  const filtro = (document.getElementById('empBuscar').value || '').toLowerCase();
+  const cont = document.getElementById('empListaPicker');
+  const lista = STATE.empleados.filter(e => e.Nombre.toLowerCase().includes(filtro));
+  if(!lista.length){ cont.innerHTML = '<div class="muted" style="padding:8px">No hay empleados en el catálogo todavía.</div>'; return; }
+  cont.innerHTML = lista.map(e => `
+    <div class="emp-opt">
+      <input type="checkbox" data-id="${e.ID}" ${seleccionEmpleados.has(String(e.ID)) ? 'checked':''} onchange="toggleEmp('${e.ID}', this.checked)">
+      <label style="margin:0;font-weight:400">${escapeHtml(e.Nombre)} <span class="muted">${e.Puesto ? '· '+escapeHtml(e.Puesto):''}</span></label>
+    </div>`).join('');
+  document.getElementById('empSeleccionados').textContent = seleccionEmpleados.size;
+}
+document.getElementById('empBuscar').addEventListener('input', renderPicker);
+
+function toggleEmp(id, checked){
+  if(checked) seleccionEmpleados.add(String(id));
+  else seleccionEmpleados.delete(String(id));
+  document.getElementById('empSeleccionados').textContent = seleccionEmpleados.size;
+}
+
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+// ---------- acciones ----------
+document.getElementById('btnAddEmpleado').addEventListener('click', async ()=>{
+  const nombre = document.getElementById('nEmpNombre').value.trim();
+  if(!nombre){ toast('Escribe el nombre del empleado', true); return; }
+  try{
+    await apiPost({action:'addEmpleado', empleado:{
+      Nombre: nombre,
+      Puesto: document.getElementById('nEmpPuesto').value.trim(),
+      Departamento: document.getElementById('nEmpDepto').value.trim()
+    }});
+    document.getElementById('nEmpNombre').value='';
+    document.getElementById('nEmpPuesto').value='';
+    document.getElementById('nEmpDepto').value='';
+    toast('Empleado agregado');
+    await cargarDatos();
+  }catch(err){ toast('Error al agregar empleado: ' + err.message, true); }
+});
+
+document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
+  const nombre = document.getElementById('cNombre').value.trim();
+  const fecha = document.getElementById('cFecha').value;
+  const duracion = document.getElementById('cDuracion').value;
+  const tieneVenc = document.getElementById('cVencimiento').checked;
+  const fechaVenc = document.getElementById('cFechaVenc').value;
+
+  if(!nombre) return toast('Escribe el nombre del curso', true);
+  if(!fecha) return toast('Selecciona la fecha en que se impartió', true);
+  if(!duracion || Number(duracion) <= 0) return toast('Captura la duración en horas', true);
+  if(tieneVenc && !fechaVenc) return toast('Captura la fecha de vencimiento', true);
+
+  try{
+    await apiPost({
+      action:'addCurso',
+      curso:{
+        Nombre: nombre,
+        FechaImparticion: fecha,
+        DuracionHoras: duracion,
+        TieneVencimiento: tieneVenc,
+        FechaVencimiento: tieneVenc ? fechaVenc : ''
+      },
+      empleadoIds: Array.from(seleccionEmpleados)
+    });
+    toast('Curso guardado y horas acumuladas');
+    document.getElementById('cNombre').value='';
+    document.getElementById('cFecha').value='';
+    document.getElementById('cDuracion').value='';
+    document.getElementById('cVencimiento').checked=false;
+    document.getElementById('cFechaVenc').value='';
+    document.getElementById('cFechaVencWrap').style.display='none';
+    seleccionEmpleados.clear();
+    await cargarDatos();
+  }catch(err){ toast('Error al guardar curso: ' + err.message, true); }
+});
+
+async function eliminarCurso(id){
+  if(!confirm('¿Eliminar este curso y sus registros de participación?')) return;
+  try{ await apiPost({action:'deleteCurso', id}); toast('Curso eliminado'); await cargarDatos(); }
+  catch(err){ toast('Error al eliminar: ' + err.message, true); }
+}
+async function eliminarEmpleado(id){
+  if(!confirm('¿Eliminar este empleado del catálogo? (No borra su historial de participaciones)')) return;
+  try{ await apiPost({action:'deleteEmpleado', id}); toast('Empleado eliminado'); await cargarDatos(); }
+  catch(err){ toast('Error al eliminar: ' + err.message, true); }
+}
+
+// ---------- init ----------
+if(API_URL.indexOf('PEGA_AQUI') !== -1){
+  setStatus(false);
+  document.getElementById('statusText').textContent = 'Falta configurar API_URL';
+} else {
+  cargarDatos();
+}
+</script>
+</body>
+</html>
