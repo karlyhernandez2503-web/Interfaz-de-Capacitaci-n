@@ -448,25 +448,82 @@ function withQuery(url, params){
   return url + sep + params;
 }
 
+// ---------- JSONP (lectura) — evita el bloqueo de CORS de fetch() ----------
+function jsonpRequest(url, params){
+  return new Promise((resolve, reject)=>{
+    const cbName = '__cb_' + Date.now() + '_' + Math.floor(Math.random()*1e6);
+    const script = document.createElement('script');
+    let timeoutId;
+    function cleanup(){
+      delete window[cbName];
+      script.remove();
+      clearTimeout(timeoutId);
+    }
+    window[cbName] = (data)=>{ cleanup(); resolve(data); };
+    script.onerror = ()=>{ cleanup(); reject(new Error('No se pudo conectar con Google Sheets')); };
+    timeoutId = setTimeout(()=>{ cleanup(); reject(new Error('Tiempo de espera agotado')); }, 20000);
+    const qs = new URLSearchParams(Object.assign({}, params, {callback: cbName})).toString();
+    script.src = withQuery(url, qs);
+    document.body.appendChild(script);
+  });
+}
+
+// ---------- Formulario oculto (escritura) — evita el bloqueo de CORS de fetch() ----------
+function iframePost(payload){
+  return new Promise((resolve)=>{
+    const url = getApiUrl();
+    const iframeName = '__post_' + Date.now();
+    const iframe = document.createElement('iframe');
+    iframe.name = iframeName;
+    iframe.style.display = 'none';
+
+    let loadCount = 0;
+    let resolved = false;
+    function finish(){
+      if(resolved) return;
+      resolved = true;
+      clearTimeout(safetyTimeout);
+      setTimeout(()=>{ iframe.remove(); form.remove(); }, 400);
+      resolve();
+    }
+    iframe.addEventListener('load', ()=>{
+      loadCount++;
+      if(loadCount === 1) return; // primer load = página en blanco del iframe, se ignora
+      finish();
+    });
+    const safetyTimeout = setTimeout(finish, 20000); // por si el segundo "load" no llega
+
+    document.body.appendChild(iframe);
+
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    form.target = iframeName;
+    form.style.display = 'none';
+    const input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'payload';
+    input.value = JSON.stringify(payload);
+    form.appendChild(input);
+    document.body.appendChild(form);
+
+    setTimeout(()=> form.submit(), 60); // deja que el iframe registre su "load" en blanco primero
+  });
+}
+
 // ---------- API ----------
 async function apiGet(){
   const url = getApiUrl();
   if(!url) throw new Error('Falta configurar la URL de Apps Script');
-  const res = await fetch(withQuery(url, 'action=getAll'));
-  if(!res.ok) throw new Error('HTTP ' + res.status);
-  return res.json();
+  return jsonpRequest(url, {action:'getAll'});
 }
 async function apiPost(payload){
   const url = getApiUrl();
   if(!url) throw new Error('Falta configurar la URL de Apps Script');
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {'Content-Type': 'text/plain;charset=utf-8'}, // evita preflight CORS en Apps Script
-    body: JSON.stringify(payload)
-  });
-  const json = await res.json();
-  if(json.success === false) throw new Error(json.error || 'Error desconocido');
-  return json;
+  await iframePost(payload);
+  // El formulario oculto no permite leer la respuesta del servidor (por diseño,
+  // así se evita el bloqueo de CORS), así que asumimos éxito y refrescamos datos.
+  return { success: true };
 }
 
 async function cargarDatos(){
@@ -794,22 +851,24 @@ document.getElementById('btnConfirmarCarga').addEventListener('click', async ()=
 
   const btn = document.getElementById('btnConfirmarCarga');
   btn.disabled = true;
-  const CHUNK = 200;
-  let agregados = 0, actualizados = 0;
+  const CHUNK = 150;
+  const antesCount = STATE.empleados.length;
   try{
     for(let i = 0; i < lista.length; i += CHUNK){
       const lote = lista.slice(i, i + CHUNK);
       msg.style.color = 'var(--p5)';
-      msg.textContent = `Cargando ${Math.min(i + CHUNK, lista.length)} de ${lista.length}…`;
-      const r = await apiPost({action:'bulkUpsertEmpleados', empleados: lote});
-      agregados += r.agregados || 0;
-      actualizados += r.actualizados || 0;
+      msg.textContent = `Enviando ${Math.min(i + CHUNK, lista.length)} de ${lista.length}…`;
+      await apiPost({action:'bulkUpsertEmpleados', empleados: lote});
     }
-    msg.style.color = 'var(--ok)';
-    msg.textContent = `✔ Listo: ${agregados} empleado(s) nuevo(s), ${actualizados} actualizado(s).`;
-    toast('Catálogo cargado correctamente');
+    msg.style.color = 'var(--p5)';
+    msg.textContent = 'Confirmando en Google Sheets…';
     await cargarDatos();
-    setTimeout(()=>{ uploadOverlay.classList.add('hidden'); catalogoParaCargar = []; }, 1400);
+    const nuevos = Math.max(0, STATE.empleados.length - antesCount);
+    const actualizados = Math.max(0, lista.length - nuevos);
+    msg.style.color = 'var(--ok)';
+    msg.textContent = `✔ Listo: ${nuevos} empleado(s) nuevo(s), ${actualizados} actualizado(s) (aprox.).`;
+    toast('Catálogo cargado correctamente');
+    setTimeout(()=>{ uploadOverlay.classList.add('hidden'); catalogoParaCargar = []; }, 1600);
   }catch(err){
     msg.style.color = 'var(--danger)';
     msg.textContent = 'Error al cargar: ' + err.message;
