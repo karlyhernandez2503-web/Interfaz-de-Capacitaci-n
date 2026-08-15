@@ -184,6 +184,15 @@
     display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
     background:var(--p1);border:1px solid var(--p2);border-radius:12px;padding:14px 18px;margin-bottom:18px;
   }
+  .filter-bar{
+    display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;
+    background:#faf5fe;border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;margin-bottom:16px;
+  }
+  .filter-bar > div{min-width:170px;flex:1;}
+  .filter-bar label{margin:0 0 6px;font-size:12px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
+  .filter-bar select, .filter-bar input{margin:0;}
+  .filter-actions{display:flex;gap:8px;flex:0 0 auto;min-width:auto;}
 </style>
 </head>
 <body>
@@ -306,6 +315,8 @@
         <details style="margin-top:16px">
           <summary style="cursor:pointer;color:var(--p5);font-weight:600;font-size:13.5px">+ Agregar nuevo empleado al catálogo</summary>
           <div style="margin-top:10px">
+            <label>N° de empleado (código)</label>
+            <input type="text" id="nEmpId" placeholder="Ej. 10007 — opcional, se autogenera si se deja vacío">
             <label>Nombre</label>
             <input type="text" id="nEmpNombre" placeholder="Nombre completo">
             <div class="row">
@@ -323,6 +334,26 @@
   <section id="view-listaCursos" class="view">
     <h2>Cursos registrados</h2>
     <p class="section-sub">Estado de vencimiento y participantes por curso.</p>
+
+    <div class="filter-bar">
+      <div>
+        <label>Mes de impartición</label>
+        <select id="filtroCursoMes"><option value="">Todos los meses</option></select>
+      </div>
+      <div>
+        <label>Curso</label>
+        <select id="filtroCursoNombre"><option value="">Todos los cursos</option></select>
+      </div>
+      <div>
+        <label>Planta / Departamento</label>
+        <select id="filtroCursoPlanta"><option value="">Todas las plantas</option></select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-ghost btn-sm" id="btnLimpiarFiltrosCursos">Limpiar filtros</button>
+        <button class="btn btn-primary btn-sm" id="btnExportCursos">📊 Exportar a Excel</button>
+      </div>
+    </div>
+
     <div class="table-wrap">
       <table>
         <thead><tr><th>Curso</th><th>Fecha impartición</th><th>Duración</th><th>Vencimiento</th><th>Estado</th><th>Participantes</th><th></th></tr></thead>
@@ -350,11 +381,35 @@
       </div>
     </div>
 
-    <input type="text" id="empBuscarTabla" placeholder="🔍 Buscar empleado…" style="max-width:320px;margin-bottom:14px">
+    <div class="filter-bar">
+      <div>
+        <label>Buscar empleado</label>
+        <input type="text" id="empBuscarTabla" placeholder="🔍 Nombre o número…">
+      </div>
+      <div>
+        <label>Mes de capacitación</label>
+        <select id="filtroEmpMes"><option value="">Todos los meses</option></select>
+      </div>
+      <div>
+        <label>Curso</label>
+        <select id="filtroEmpCurso"><option value="">Todos los cursos</option></select>
+      </div>
+      <div>
+        <label>Planta / Departamento</label>
+        <select id="filtroEmpPlanta"><option value="">Todas las plantas</option></select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-ghost btn-sm" id="btnLimpiarFiltrosEmpleados">Limpiar filtros</button>
+        <button class="btn btn-primary btn-sm" id="btnExportEmpleados">📊 Exportar a Excel</button>
+      </div>
+    </div>
+
+    <p class="muted" id="empFiltroNota" style="font-size:12.5px;margin:-6px 0 12px;display:none"></p>
+
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Empleado</th><th>Puesto</th><th>Departamento</th><th>Cursos tomados</th><th>Horas acumuladas</th><th></th></tr></thead>
-        <tbody id="tblEmpleados"><tr><td colspan="6" class="empty-state">Sin empleados en catálogo</td></tr></tbody>
+        <thead><tr><th>N° Empleado</th><th>Empleado</th><th>Puesto</th><th>Departamento</th><th>Cursos tomados</th><th>Horas acumuladas</th><th></th></tr></thead>
+        <tbody id="tblEmpleados"><tr><td colspan="7" class="empty-state">Sin empleados en catálogo</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -584,6 +639,7 @@ document.getElementById('btnGuardarApiUrl').addEventListener('click', async ()=>
 
 // ---------- render ----------
 function render(){
+  poblarFiltros();
   renderPicker();
   renderResumen();
   renderCursos();
@@ -601,6 +657,9 @@ function cursosDe(empleadoId){
 function participantesDe(cursoId){
   return STATE.participaciones.filter(p => String(p.CursoID) === String(cursoId));
 }
+function empleadoPorId(id){
+  return STATE.empleados.find(e => String(e.ID) === String(id));
+}
 
 function estadoVencimiento(curso){
   if(curso.TieneVencimiento !== 'SI') return {label:'Sin vencimiento', cls:'badge-neutral'};
@@ -610,6 +669,116 @@ function estadoVencimiento(curso){
   if(d <= 30) return {label:'Por vencer (' + d + ' días)', cls:'badge-warn'};
   return {label:'Vigente', cls:'badge-ok'};
 }
+
+// ---------- filtros (mes / curso / planta) ----------
+function mesKey(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr);
+  if(isNaN(d)) return null;
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+}
+function mesLabel(key){
+  const [y,m] = key.split('-');
+  const d = new Date(Number(y), Number(m)-1, 1);
+  const s = d.toLocaleDateString('es-MX', {month:'long', year:'numeric'});
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function poblarSelect(select, valores, formatLabel){
+  const actual = select.value;
+  const placeholder = select.options[0];
+  select.innerHTML = '';
+  select.appendChild(placeholder);
+  valores.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = formatLabel ? formatLabel(v) : v;
+    select.appendChild(opt);
+  });
+  if(valores.includes(actual)) select.value = actual;
+}
+
+function poblarFiltros(){
+  const meses = Array.from(new Set(STATE.cursos.map(c => mesKey(c.FechaImparticion)).filter(Boolean))).sort().reverse();
+  const nombresCursos = Array.from(new Set(STATE.cursos.map(c => c.Nombre).filter(Boolean))).sort();
+  const plantas = Array.from(new Set(STATE.empleados.map(e => e.Departamento).filter(Boolean))).sort();
+
+  poblarSelect(document.getElementById('filtroCursoMes'), meses, mesLabel);
+  poblarSelect(document.getElementById('filtroCursoNombre'), nombresCursos);
+  poblarSelect(document.getElementById('filtroCursoPlanta'), plantas);
+
+  poblarSelect(document.getElementById('filtroEmpMes'), meses, mesLabel);
+  poblarSelect(document.getElementById('filtroEmpCurso'), nombresCursos);
+  poblarSelect(document.getElementById('filtroEmpPlanta'), plantas);
+}
+
+function getFiltrosCursos(){
+  return {
+    mes: document.getElementById('filtroCursoMes').value,
+    nombre: document.getElementById('filtroCursoNombre').value,
+    planta: document.getElementById('filtroCursoPlanta').value
+  };
+}
+function getCursosFiltrados(){
+  const f = getFiltrosCursos();
+  return STATE.cursos.filter(c => {
+    if(f.mes && mesKey(c.FechaImparticion) !== f.mes) return false;
+    if(f.nombre && c.Nombre !== f.nombre) return false;
+    if(f.planta){
+      const parts = participantesDe(c.ID);
+      const enPlanta = parts.some(p => {
+        const emp = empleadoPorId(p.EmpleadoID);
+        return emp && emp.Departamento === f.planta;
+      });
+      if(!enPlanta) return false;
+    }
+    return true;
+  }).sort((a,b)=> new Date(b.FechaImparticion) - new Date(a.FechaImparticion));
+}
+
+function getFiltrosEmpleados(){
+  return {
+    texto: (document.getElementById('empBuscarTabla').value || '').toLowerCase(),
+    mes: document.getElementById('filtroEmpMes').value,
+    curso: document.getElementById('filtroEmpCurso').value,
+    planta: document.getElementById('filtroEmpPlanta').value
+  };
+}
+// participaciones de un empleado que cumplen los filtros de mes/curso activos
+function participacionesFiltradas(empleadoId, f){
+  return cursosDe(empleadoId).filter(p => {
+    if(f.mes && mesKey(p.FechaImparticion) !== f.mes) return false;
+    if(f.curso && p.CursoNombre !== f.curso) return false;
+    return true;
+  });
+}
+function getEmpleadosFiltrados(){
+  const f = getFiltrosEmpleados();
+  const filtroActivoMesOCurso = !!(f.mes || f.curso);
+  return STATE.empleados.filter(e => {
+    if(f.texto && !e.Nombre.toLowerCase().includes(f.texto) && !String(e.ID).toLowerCase().includes(f.texto)) return false;
+    if(f.planta && e.Departamento !== f.planta) return false;
+    if(filtroActivoMesOCurso && participacionesFiltradas(e.ID, f).length === 0) return false;
+    return true;
+  });
+}
+
+document.getElementById('filtroCursoMes').addEventListener('change', renderCursos);
+document.getElementById('filtroCursoNombre').addEventListener('change', renderCursos);
+document.getElementById('filtroCursoPlanta').addEventListener('change', renderCursos);
+document.getElementById('btnLimpiarFiltrosCursos').addEventListener('click', ()=>{
+  ['filtroCursoMes','filtroCursoNombre','filtroCursoPlanta'].forEach(id => document.getElementById(id).value = '');
+  renderCursos();
+});
+
+document.getElementById('filtroEmpMes').addEventListener('change', renderEmpleadosTabla);
+document.getElementById('filtroEmpCurso').addEventListener('change', renderEmpleadosTabla);
+document.getElementById('filtroEmpPlanta').addEventListener('change', renderEmpleadosTabla);
+document.getElementById('btnLimpiarFiltrosEmpleados').addEventListener('click', ()=>{
+  ['filtroEmpMes','filtroEmpCurso','filtroEmpPlanta'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('empBuscarTabla').value = '';
+  renderEmpleadosTabla();
+});
 
 function renderResumen(){
   document.getElementById('kpiCursos').textContent = STATE.cursos.length;
@@ -646,8 +815,9 @@ function renderResumen(){
 
 function renderCursos(){
   const tbody = document.getElementById('tblCursos');
+  const ordenados = getCursosFiltrados();
   if(!STATE.cursos.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Sin cursos registrados</td></tr>'; return; }
-  const ordenados = [...STATE.cursos].sort((a,b)=> new Date(b.FechaImparticion) - new Date(a.FechaImparticion));
+  if(!ordenados.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Ningún curso coincide con los filtros</td></tr>'; return; }
   tbody.innerHTML = ordenados.map(c=>{
     const est = estadoVencimiento(c);
     const parts = participantesDe(c.ID);
@@ -665,19 +835,34 @@ function renderCursos(){
 }
 
 function renderEmpleadosTabla(){
-  const filtro = (document.getElementById('empBuscarTabla').value || '').toLowerCase();
+  const f = getFiltrosEmpleados();
   const tbody = document.getElementById('tblEmpleados');
-  const lista = STATE.empleados.filter(e => e.Nombre.toLowerCase().includes(filtro));
-  if(!lista.length){ tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Sin empleados en catálogo</td></tr>'; return; }
+  const lista = getEmpleadosFiltrados();
+
+  const nota = document.getElementById('empFiltroNota');
+  if(f.mes || f.curso){
+    nota.style.display = 'block';
+    const partes = [];
+    if(f.mes) partes.push(mesLabel(f.mes));
+    if(f.curso) partes.push('curso "' + f.curso + '"');
+    nota.textContent = 'Horas y cursos mostrados corresponden solo a: ' + partes.join(' · ');
+  } else {
+    nota.style.display = 'none';
+  }
+
+  if(!STATE.empleados.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Sin empleados en catálogo</td></tr>'; return; }
+  if(!lista.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Ningún empleado coincide con los filtros</td></tr>'; return; }
+
   tbody.innerHTML = lista.map(e=>{
-    const horas = horasDe(e.ID);
-    const cursos = cursosDe(e.ID);
-    const nombresCursos = cursos.map(c=>c.CursoNombre).join(', ') || 'Ninguno aún';
+    const parts = participacionesFiltradas(e.ID, f);
+    const horas = parts.reduce((s,p)=> s + (Number(p.DuracionHoras)||0), 0);
+    const nombresCursos = parts.map(c=>c.CursoNombre).join(', ') || 'Ninguno aún';
     return `<tr>
+      <td><span class="badge badge-neutral">${escapeHtml(e.ID)}</span></td>
       <td>${escapeHtml(e.Nombre)}</td>
       <td>${escapeHtml(e.Puesto||'—')}</td>
       <td>${escapeHtml(e.Departamento||'—')}</td>
-      <td title="${escapeHtml(nombresCursos)}">${cursos.length}</td>
+      <td title="${escapeHtml(nombresCursos)}">${parts.length}</td>
       <td><b>${horas.toFixed(1).replace(/\.0$/,'')}</b> hrs</td>
       <td><button class="btn btn-danger btn-sm" onclick="eliminarEmpleado('${e.ID}')">Eliminar</button></td>
     </tr>`;
@@ -685,15 +870,72 @@ function renderEmpleadosTabla(){
 }
 document.getElementById('empBuscarTabla').addEventListener('input', renderEmpleadosTabla);
 
+// ---------- exportar a Excel ----------
+function nombreArchivoFecha(base){
+  const d = new Date();
+  const f = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  return `${base}_${f}.xlsx`;
+}
+
+document.getElementById('btnExportCursos').addEventListener('click', ()=>{
+  const cursos = getCursosFiltrados();
+  if(!cursos.length){ toast('No hay cursos que exportar con los filtros actuales', true); return; }
+  const filas = cursos.map(c=>{
+    const est = estadoVencimiento(c);
+    const parts = participantesDe(c.ID);
+    return {
+      'Curso': c.Nombre,
+      'Fecha de impartición': c.FechaImparticion,
+      'Duración (hrs)': Number(c.DuracionHoras) || 0,
+      'Tiene vencimiento': c.TieneVencimiento === 'SI' ? 'Sí' : 'No',
+      'Fecha de vencimiento': c.TieneVencimiento === 'SI' ? c.FechaVencimiento : '',
+      'Estado': est.label,
+      'N° de participantes': parts.length,
+      'Participantes': parts.map(p=>p.EmpleadoNombre).join(', ')
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(filas);
+  ws['!cols'] = [{wch:28},{wch:14},{wch:12},{wch:14},{wch:16},{wch:16},{wch:14},{wch:50}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Cursos');
+  XLSX.writeFile(wb, nombreArchivoFecha('Cursos_capacitacion'));
+});
+
+document.getElementById('btnExportEmpleados').addEventListener('click', ()=>{
+  const f = getFiltrosEmpleados();
+  const empleados = getEmpleadosFiltrados();
+  if(!empleados.length){ toast('No hay empleados que exportar con los filtros actuales', true); return; }
+  const filas = empleados.map(e=>{
+    const parts = participacionesFiltradas(e.ID, f);
+    const horas = parts.reduce((s,p)=> s + (Number(p.DuracionHoras)||0), 0);
+    return {
+      'N° Empleado': e.ID,
+      'Nombre': e.Nombre,
+      'Puesto': e.Puesto || '',
+      'Departamento / Planta': e.Departamento || '',
+      'Cursos tomados': parts.length,
+      'Horas acumuladas': Number(horas.toFixed(2)),
+      'Detalle de cursos': parts.map(p=>p.CursoNombre).join(', ')
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(filas);
+  ws['!cols'] = [{wch:12},{wch:30},{wch:24},{wch:20},{wch:14},{wch:16},{wch:50}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Empleados y horas');
+  XLSX.writeFile(wb, nombreArchivoFecha('Empleados_horas_capacitacion'));
+});
+
 function renderPicker(){
   const filtro = (document.getElementById('empBuscar').value || '').toLowerCase();
   const cont = document.getElementById('empListaPicker');
-  const lista = STATE.empleados.filter(e => e.Nombre.toLowerCase().includes(filtro));
+  const lista = STATE.empleados.filter(e =>
+    e.Nombre.toLowerCase().includes(filtro) || String(e.ID).toLowerCase().includes(filtro)
+  );
   if(!lista.length){ cont.innerHTML = '<div class="muted" style="padding:8px">No hay empleados en el catálogo todavía.</div>'; return; }
   cont.innerHTML = lista.map(e => `
     <div class="emp-opt">
       <input type="checkbox" data-id="${e.ID}" ${seleccionEmpleados.has(String(e.ID)) ? 'checked':''} onchange="toggleEmp('${e.ID}', this.checked)">
-      <label style="margin:0;font-weight:400">${escapeHtml(e.Nombre)} <span class="muted">${e.Puesto ? '· '+escapeHtml(e.Puesto):''}</span></label>
+      <label style="margin:0;font-weight:400"><span class="muted">#${escapeHtml(e.ID)}</span> — ${escapeHtml(e.Nombre)} <span class="muted">${e.Puesto ? '· '+escapeHtml(e.Puesto):''}</span></label>
     </div>`).join('');
   document.getElementById('empSeleccionados').textContent = seleccionEmpleados.size;
 }
@@ -712,13 +954,20 @@ function escapeHtml(s){
 // ---------- acciones ----------
 document.getElementById('btnAddEmpleado').addEventListener('click', async ()=>{
   const nombre = document.getElementById('nEmpNombre').value.trim();
+  const idManual = document.getElementById('nEmpId').value.trim();
   if(!nombre){ toast('Escribe el nombre del empleado', true); return; }
+  if(idManual && STATE.empleados.some(e => String(e.ID) === idManual)){
+    toast('Ya existe un empleado con ese número. Usa otro o déjalo vacío para autogenerar.', true);
+    return;
+  }
   try{
     await apiPost({action:'addEmpleado', empleado:{
+      ID: idManual || undefined,
       Nombre: nombre,
       Puesto: document.getElementById('nEmpPuesto').value.trim(),
       Departamento: document.getElementById('nEmpDepto').value.trim()
     }});
+    document.getElementById('nEmpId').value='';
     document.getElementById('nEmpNombre').value='';
     document.getElementById('nEmpPuesto').value='';
     document.getElementById('nEmpDepto').value='';
