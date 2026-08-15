@@ -170,6 +170,20 @@
   }
   .config-box code{background:#fff;padding:2px 6px;border-radius:5px;}
   .empty-state{text-align:center;padding:40px 20px;color:var(--ink-soft);}
+
+  .config-overlay{
+    position:fixed;inset:0;background:rgba(42,10,60,.45);
+    display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;
+  }
+  .config-overlay.hidden{display:none;}
+  .config-modal{
+    background:#fff;border-radius:16px;padding:26px;max-width:560px;width:100%;
+    box-shadow:0 20px 60px rgba(42,10,60,.35);max-height:88vh;overflow-y:auto;
+  }
+  .upload-box{
+    display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;
+    background:var(--p1);border:1px solid var(--p2);border-radius:12px;padding:14px 18px;margin-bottom:18px;
+  }
 </style>
 </head>
 <body>
@@ -179,8 +193,29 @@
     <small>Metelmex · Recursos Humanos</small>
     <h1>📚 Dashboard de Capacitación</h1>
   </div>
-  <span id="statusDot"><span class="dot"></span><span id="statusText">Conectando…</span></span>
+  <div style="display:flex;align-items:center;gap:10px">
+    <span id="statusDot"><span class="dot"></span><span id="statusText">Conectando…</span></span>
+    <button id="btnConfig" class="btn btn-ghost btn-sm" style="background:rgba(255,255,255,.16);color:#fff">⚙️ Configuración</button>
+  </div>
 </header>
+
+<!-- PANEL DE CONFIGURACIÓN -->
+<div id="configOverlay" class="config-overlay hidden">
+  <div class="config-modal">
+    <h2 style="margin-top:0">⚙️ Configuración de conexión</h2>
+    <p class="section-sub" style="margin-top:-4px">
+      Pega aquí la URL de tu Web App de Google Apps Script (Extensiones &gt; Apps Script &gt;
+      Implementar &gt; Nueva implementación &gt; Aplicación web &gt; copiar la URL que termina en <code>/exec</code>).
+    </p>
+    <label>URL de Apps Script (API_URL)</label>
+    <input type="text" id="inputApiUrl" placeholder="https://script.google.com/macros/s/XXXXXXXX/exec">
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btnGuardarApiUrl">Guardar y conectar</button>
+      <button class="btn btn-ghost" id="btnCerrarConfig">Cerrar</button>
+    </div>
+    <div id="configMsg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
 
 <nav>
   <button class="tab-btn active" data-view="dashboard">Resumen</button>
@@ -293,6 +328,21 @@
   <section id="view-empleados" class="view">
     <h2>Empleados y horas acumuladas</h2>
     <p class="section-sub">Total de horas de capacitación por empleado según los cursos en los que ha participado.</p>
+
+    <div class="upload-box">
+      <div>
+        <b>Cargar catálogo de empleados</b>
+        <div class="muted" style="font-size:12.5px;margin-top:2px">
+          Acepta el archivo Excel/CSV con columnas CODIGO, NOMBRE_COMPLETO, DEPARTAMENTO, PUESTO, ESTATUS.
+          Actualiza empleados existentes (por código) y agrega los nuevos — no borra el historial de horas.
+        </div>
+      </div>
+      <div>
+        <input type="file" id="fileCatalogo" accept=".xlsx,.xls,.csv" style="display:none">
+        <button class="btn btn-primary btn-sm" id="btnAbrirCatalogo">📤 Subir catálogo</button>
+      </div>
+    </div>
+
     <input type="text" id="empBuscarTabla" placeholder="🔍 Buscar empleado…" style="max-width:320px;margin-bottom:14px">
     <div class="table-wrap">
       <table>
@@ -304,17 +354,46 @@
 
 </main>
 
+<!-- MODAL DE VISTA PREVIA DE CARGA -->
+<div id="uploadOverlay" class="config-overlay hidden">
+  <div class="config-modal">
+    <h2 style="margin-top:0">📤 Vista previa del catálogo</h2>
+    <div id="uploadSummary" class="section-sub" style="margin-top:-4px"></div>
+    <div class="checkbox-line" style="margin-top:6px">
+      <input type="checkbox" id="soloAlta" checked>
+      <label for="soloAlta" style="margin:0">Cargar solo empleados con estatus ALTA</label>
+    </div>
+    <div class="table-wrap" style="max-height:280px;margin-top:14px">
+      <table>
+        <thead><tr><th>Código</th><th>Nombre</th><th>Depto</th><th>Puesto</th><th>Estatus</th></tr></thead>
+        <tbody id="uploadPreviewBody"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btnConfirmarCarga">Confirmar carga</button>
+      <button class="btn btn-ghost" id="btnCancelarCarga">Cancelar</button>
+    </div>
+    <div id="uploadMsg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 /* =========================================================
-   CONFIGURACIÓN — pega aquí la URL de tu Web App de Apps Script
-   (Implementar > Nueva implementación > Aplicación web > Copiar URL)
+   CONFIGURACIÓN — la URL del Web App de Apps Script se
+   guarda en el navegador (localStorage) desde el botón
+   "⚙️ Configuración" del encabezado. No hace falta editar
+   este archivo para conectarlo.
    ========================================================= */
-const API_URL = "PEGA_AQUI_TU_URL_DE_APPS_SCRIPT";
+const API_URL_STORAGE_KEY = 'capacitacion_api_url';
+function getApiUrl(){ return localStorage.getItem(API_URL_STORAGE_KEY) || ''; }
+function setApiUrl(url){ localStorage.setItem(API_URL_STORAGE_KEY, url); }
 
 let STATE = { empleados: [], cursos: [], participaciones: [] };
 let seleccionEmpleados = new Set();
+let catalogoParaCargar = [];
 
 // ---------- utilidades ----------
 function toast(msg, isError){
@@ -359,12 +438,16 @@ document.getElementById('cVencimiento').addEventListener('change', (e)=>{
 
 // ---------- API ----------
 async function apiGet(){
-  const res = await fetch(API_URL + '?action=getAll');
+  const url = getApiUrl();
+  if(!url) throw new Error('Falta configurar la URL de Apps Script');
+  const res = await fetch(url + '?action=getAll');
   if(!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
 }
 async function apiPost(payload){
-  const res = await fetch(API_URL, {
+  const url = getApiUrl();
+  if(!url) throw new Error('Falta configurar la URL de Apps Script');
+  const res = await fetch(url, {
     method: 'POST',
     headers: {'Content-Type': 'text/plain;charset=utf-8'}, // evita preflight CORS en Apps Script
     body: JSON.stringify(payload)
@@ -375,6 +458,11 @@ async function apiPost(payload){
 }
 
 async function cargarDatos(){
+  if(!getApiUrl()){
+    setStatus(false);
+    document.getElementById('statusText').textContent = 'Falta configurar la conexión';
+    return;
+  }
   try{
     const data = await apiGet();
     STATE = data;
@@ -383,9 +471,38 @@ async function cargarDatos(){
   }catch(err){
     console.error(err);
     setStatus(false);
-    toast('No se pudo conectar con Google Sheets. Revisa API_URL en index.html', true);
+    toast('No se pudo conectar con Google Sheets. Revisa la URL en Configuración', true);
   }
 }
+
+// ---------- configuración ----------
+const configOverlay = document.getElementById('configOverlay');
+function abrirConfig(){
+  document.getElementById('inputApiUrl').value = getApiUrl();
+  document.getElementById('configMsg').textContent = '';
+  configOverlay.classList.remove('hidden');
+}
+document.getElementById('btnConfig').addEventListener('click', abrirConfig);
+document.getElementById('btnCerrarConfig').addEventListener('click', ()=> configOverlay.classList.add('hidden'));
+document.getElementById('btnGuardarApiUrl').addEventListener('click', async ()=>{
+  const val = document.getElementById('inputApiUrl').value.trim();
+  const msg = document.getElementById('configMsg');
+  if(!val || !val.startsWith('http')){ msg.style.color='var(--danger)'; msg.textContent='Pega una URL válida (empieza con https://)'; return; }
+  setApiUrl(val);
+  msg.style.color = 'var(--p5)';
+  msg.textContent = 'Conectando…';
+  try{
+    await cargarDatos();
+    if(getApiUrl()){
+      msg.style.color = 'var(--ok)';
+      msg.textContent = '✔ Conectado correctamente.';
+      setTimeout(()=> configOverlay.classList.add('hidden'), 900);
+    }
+  }catch(err){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'No se pudo conectar: ' + err.message;
+  }
+});
 
 // ---------- render ----------
 function render(){
@@ -579,13 +696,109 @@ async function eliminarEmpleado(id){
   catch(err){ toast('Error al eliminar: ' + err.message, true); }
 }
 
-// ---------- init ----------
-if(API_URL.indexOf('PEGA_AQUI') !== -1){
-  setStatus(false);
-  document.getElementById('statusText').textContent = 'Falta configurar API_URL';
-} else {
-  cargarDatos();
+// ---------- carga de catálogo (xlsx/csv) ----------
+const uploadOverlay = document.getElementById('uploadOverlay');
+const fileInput = document.getElementById('fileCatalogo');
+
+document.getElementById('btnAbrirCatalogo').addEventListener('click', ()=> fileInput.click());
+
+fileInput.addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (evt)=>{
+    try{
+      const wb = XLSX.read(evt.target.result, {type:'array'});
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+      catalogoParaCargar = rows.map(r => ({
+        ID: String(r.CODIGO ?? r.Codigo ?? r.codigo ?? '').trim(),
+        Nombre: String(r.NOMBRE_COMPLETO ?? r.Nombre ?? r.nombre ?? '').trim(),
+        Departamento: String(r.DEPARTAMENTO ?? r.Departamento ?? '').trim(),
+        Puesto: String(r.PUESTO ?? r.Puesto ?? '').trim(),
+        Estatus: String(r.ESTATUS ?? r.Estatus ?? 'ALTA').trim().toUpperCase()
+      })).filter(r => r.ID && r.Nombre);
+
+      if(!catalogoParaCargar.length){
+        toast('No se encontraron filas válidas. Verifica las columnas CODIGO y NOMBRE_COMPLETO', true);
+        return;
+      }
+      mostrarPreviewCarga();
+    }catch(err){
+      toast('No se pudo leer el archivo: ' + err.message, true);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+  fileInput.value = '';
+});
+
+function filtrarPorEstatus(){
+  const soloAlta = document.getElementById('soloAlta').checked;
+  return soloAlta ? catalogoParaCargar.filter(e => e.Estatus === 'ALTA') : catalogoParaCargar;
 }
+
+function mostrarPreviewCarga(){
+  renderPreviewTabla();
+  document.getElementById('uploadMsg').textContent = '';
+  uploadOverlay.classList.remove('hidden');
+}
+
+function renderPreviewTabla(){
+  const lista = filtrarPorEstatus();
+  const total = catalogoParaCargar.length;
+  const altas = catalogoParaCargar.filter(e => e.Estatus === 'ALTA').length;
+  document.getElementById('uploadSummary').innerHTML =
+    `Archivo leído: <b>${total}</b> filas · <b>${altas}</b> con estatus ALTA. Se cargarán <b>${lista.length}</b> empleados.`;
+  const body = document.getElementById('uploadPreviewBody');
+  const muestra = lista.slice(0, 50);
+  body.innerHTML = muestra.map(e => `<tr>
+    <td>${escapeHtml(e.ID)}</td><td>${escapeHtml(e.Nombre)}</td>
+    <td>${escapeHtml(e.Departamento)}</td><td>${escapeHtml(e.Puesto)}</td>
+    <td><span class="badge ${e.Estatus==='ALTA'?'badge-ok':'badge-neutral'}">${escapeHtml(e.Estatus)}</span></td>
+  </tr>`).join('') || '<tr><td colspan="5" class="empty-state">Sin filas con el filtro actual</td></tr>';
+  if(lista.length > 50){
+    body.innerHTML += `<tr><td colspan="5" class="muted" style="text-align:center">…y ${lista.length - 50} más</td></tr>`;
+  }
+}
+document.getElementById('soloAlta').addEventListener('change', renderPreviewTabla);
+document.getElementById('btnCancelarCarga').addEventListener('click', ()=>{
+  uploadOverlay.classList.add('hidden');
+  catalogoParaCargar = [];
+});
+
+document.getElementById('btnConfirmarCarga').addEventListener('click', async ()=>{
+  const lista = filtrarPorEstatus();
+  const msg = document.getElementById('uploadMsg');
+  if(!lista.length){ msg.style.color='var(--danger)'; msg.textContent='No hay empleados para cargar.'; return; }
+
+  const btn = document.getElementById('btnConfirmarCarga');
+  btn.disabled = true;
+  const CHUNK = 200;
+  let agregados = 0, actualizados = 0;
+  try{
+    for(let i = 0; i < lista.length; i += CHUNK){
+      const lote = lista.slice(i, i + CHUNK);
+      msg.style.color = 'var(--p5)';
+      msg.textContent = `Cargando ${Math.min(i + CHUNK, lista.length)} de ${lista.length}…`;
+      const r = await apiPost({action:'bulkUpsertEmpleados', empleados: lote});
+      agregados += r.agregados || 0;
+      actualizados += r.actualizados || 0;
+    }
+    msg.style.color = 'var(--ok)';
+    msg.textContent = `✔ Listo: ${agregados} empleado(s) nuevo(s), ${actualizados} actualizado(s).`;
+    toast('Catálogo cargado correctamente');
+    await cargarDatos();
+    setTimeout(()=>{ uploadOverlay.classList.add('hidden'); catalogoParaCargar = []; }, 1400);
+  }catch(err){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Error al cargar: ' + err.message;
+  }finally{
+    btn.disabled = false;
+  }
+});
+
+// ---------- init ----------
+cargarDatos();
 </script>
 </body>
 </html>
