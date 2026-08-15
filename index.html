@@ -408,8 +408,12 @@
 
     <div class="table-wrap">
       <table>
-        <thead><tr><th>N° Empleado</th><th>Empleado</th><th>Puesto</th><th>Departamento</th><th>Cursos tomados</th><th>Horas acumuladas</th><th></th></tr></thead>
-        <tbody id="tblEmpleados"><tr><td colspan="7" class="empty-state">Sin empleados en catálogo</td></tr></tbody>
+        <thead><tr>
+          <th>N° Empleado</th><th>Empleado</th><th>Puesto</th><th>Departamento</th><th>Estatus</th>
+          <th>CURP</th><th>Escolaridad</th><th>Ciudad</th><th>Estado</th>
+          <th>Cursos tomados</th><th>Horas acumuladas</th><th></th>
+        </tr></thead>
+        <tbody id="tblEmpleados"><tr><td colspan="12" class="empty-state">Sin empleados en catálogo</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -418,7 +422,7 @@
 
 <!-- MODAL DE VISTA PREVIA DE CARGA -->
 <div id="uploadOverlay" class="config-overlay hidden">
-  <div class="config-modal">
+  <div class="config-modal" style="max-width:920px">
     <h2 style="margin-top:0">📤 Vista previa del catálogo</h2>
     <div id="uploadSummary" class="section-sub" style="margin-top:-4px"></div>
     <div class="checkbox-line" style="margin-top:6px">
@@ -427,7 +431,7 @@
     </div>
     <div class="table-wrap" style="max-height:280px;margin-top:14px">
       <table>
-        <thead><tr><th>Código</th><th>Nombre</th><th>Depto</th><th>Puesto</th><th>Estatus</th></tr></thead>
+        <thead><tr><th>Código</th><th>Nombre</th><th>Depto</th><th>Puesto</th><th>Estatus</th><th>CURP</th><th>Escolaridad</th><th>Ciudad</th><th>Estado</th></tr></thead>
         <tbody id="uploadPreviewBody"></tbody>
       </table>
     </div>
@@ -850,8 +854,8 @@ function renderEmpleadosTabla(){
     nota.style.display = 'none';
   }
 
-  if(!STATE.empleados.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Sin empleados en catálogo</td></tr>'; return; }
-  if(!lista.length){ tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Ningún empleado coincide con los filtros</td></tr>'; return; }
+  if(!STATE.empleados.length){ tbody.innerHTML = '<tr><td colspan="12" class="empty-state">Sin empleados en catálogo</td></tr>'; return; }
+  if(!lista.length){ tbody.innerHTML = '<tr><td colspan="12" class="empty-state">Ningún empleado coincide con los filtros</td></tr>'; return; }
 
   tbody.innerHTML = lista.map(e=>{
     const parts = participacionesFiltradas(e.ID, f);
@@ -862,6 +866,11 @@ function renderEmpleadosTabla(){
       <td>${escapeHtml(e.Nombre)}</td>
       <td>${escapeHtml(e.Puesto||'—')}</td>
       <td>${escapeHtml(e.Departamento||'—')}</td>
+      <td><span class="badge ${e.Estatus==='ALTA'?'badge-ok':'badge-neutral'}">${escapeHtml(e.Estatus||'—')}</span></td>
+      <td>${escapeHtml(e.CURP||'—')}</td>
+      <td>${escapeHtml(e.Escolaridad||'—')}</td>
+      <td>${escapeHtml(e.Ciudad||'—')}</td>
+      <td>${escapeHtml(e.Estado||'—')}</td>
       <td title="${escapeHtml(nombresCursos)}">${parts.length}</td>
       <td><b>${horas.toFixed(1).replace(/\.0$/,'')}</b> hrs</td>
       <td><button class="btn btn-danger btn-sm" onclick="eliminarEmpleado('${e.ID}')">Eliminar</button></td>
@@ -913,13 +922,20 @@ document.getElementById('btnExportEmpleados').addEventListener('click', ()=>{
       'Nombre': e.Nombre,
       'Puesto': e.Puesto || '',
       'Departamento / Planta': e.Departamento || '',
+      'Estatus': e.Estatus || '',
+      'CURP': e.CURP || '',
+      'Escolaridad': e.Escolaridad || '',
+      'Ciudad': e.Ciudad || '',
+      'Estado': e.Estado || '',
+      'Tipo de escuela': e.TipoEscuela || '',
+      'Documento de escolaridad': e.DocEscolaridad || '',
       'Cursos tomados': parts.length,
       'Horas acumuladas': Number(horas.toFixed(2)),
       'Detalle de cursos': parts.map(p=>p.CursoNombre).join(', ')
     };
   });
   const ws = XLSX.utils.json_to_sheet(filas);
-  ws['!cols'] = [{wch:12},{wch:30},{wch:24},{wch:20},{wch:14},{wch:16},{wch:50}];
+  ws['!cols'] = [{wch:12},{wch:30},{wch:24},{wch:20},{wch:10},{wch:20},{wch:16},{wch:16},{wch:16},{wch:14},{wch:16},{wch:14},{wch:16},{wch:50}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Empleados y horas');
   XLSX.writeFile(wb, nombreArchivoFecha('Empleados_horas_capacitacion'));
@@ -1037,13 +1053,44 @@ fileInput.addEventListener('change', (e)=>{
     try{
       const wb = XLSX.read(evt.target.result, {type:'array'});
       const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
-      catalogoParaCargar = rows.map(r => ({
-        ID: String(r.CODIGO ?? r.Codigo ?? r.codigo ?? '').trim(),
-        Nombre: String(r.NOMBRE_COMPLETO ?? r.Nombre ?? r.nombre ?? '').trim(),
-        Departamento: String(r.DEPARTAMENTO ?? r.Departamento ?? '').trim(),
-        Puesto: String(r.PUESTO ?? r.Puesto ?? '').trim(),
-        Estatus: String(r.ESTATUS ?? r.Estatus ?? 'ALTA').trim().toUpperCase()
+      const grid = XLSX.utils.sheet_to_json(sheet, {header:1, defval:''});
+      if(!grid.length){ toast('El archivo está vacío', true); return; }
+
+      const headers = grid[0].map(h => String(h||'').trim().toUpperCase());
+      const idx = (name) => headers.indexOf(name);
+      const iCodigo = idx('CODIGO');
+      const iNombreCompleto = idx('NOMBRE_COMPLETO');
+      const iDepto = idx('DEPARTAMENTO');
+      const iPuesto = idx('PUESTO');
+      const iEstatus = idx('ESTATUS');
+      const iCurp = idx('CURP');
+      const iEscolaridad = idx('ESCOLARIDAD');
+      // Las columnas de Ciudad/Estado/Tipo de escuela/Documento no traen
+      // encabezado en el catálogo — vienen justo después de ESCOLARIDAD.
+      const iCiudad = iEscolaridad >= 0 ? iEscolaridad + 1 : -1;
+      const iEstado = iEscolaridad >= 0 ? iEscolaridad + 2 : -1;
+      const iTipoEscuela = iEscolaridad >= 0 ? iEscolaridad + 3 : -1;
+      const iDocEscolaridad = iEscolaridad >= 0 ? iEscolaridad + 4 : -1;
+
+      if(iCodigo < 0 || iNombreCompleto < 0){
+        toast('El archivo no tiene las columnas CODIGO y NOMBRE_COMPLETO', true);
+        return;
+      }
+
+      const get = (row, i) => (i >= 0 && row[i] !== undefined) ? String(row[i]).trim() : '';
+
+      catalogoParaCargar = grid.slice(1).map(row => ({
+        ID: get(row, iCodigo),
+        Nombre: get(row, iNombreCompleto), // solo nombre completo — se ignora Nombre/ApellidoPaterno/ApellidoMaterno por separado
+        Departamento: get(row, iDepto),
+        Puesto: get(row, iPuesto),
+        Estatus: (get(row, iEstatus) || 'ALTA').toUpperCase(),
+        CURP: get(row, iCurp),
+        Escolaridad: get(row, iEscolaridad),
+        Ciudad: get(row, iCiudad),
+        Estado: get(row, iEstado),
+        TipoEscuela: get(row, iTipoEscuela),
+        DocEscolaridad: get(row, iDocEscolaridad)
       })).filter(r => r.ID && r.Nombre);
 
       if(!catalogoParaCargar.length){
@@ -1082,9 +1129,11 @@ function renderPreviewTabla(){
     <td>${escapeHtml(e.ID)}</td><td>${escapeHtml(e.Nombre)}</td>
     <td>${escapeHtml(e.Departamento)}</td><td>${escapeHtml(e.Puesto)}</td>
     <td><span class="badge ${e.Estatus==='ALTA'?'badge-ok':'badge-neutral'}">${escapeHtml(e.Estatus)}</span></td>
-  </tr>`).join('') || '<tr><td colspan="5" class="empty-state">Sin filas con el filtro actual</td></tr>';
+    <td>${escapeHtml(e.CURP)}</td><td>${escapeHtml(e.Escolaridad)}</td>
+    <td>${escapeHtml(e.Ciudad)}</td><td>${escapeHtml(e.Estado)}</td>
+  </tr>`).join('') || '<tr><td colspan="9" class="empty-state">Sin filas con el filtro actual</td></tr>';
   if(lista.length > 50){
-    body.innerHTML += `<tr><td colspan="5" class="muted" style="text-align:center">…y ${lista.length - 50} más</td></tr>`;
+    body.innerHTML += `<tr><td colspan="9" class="muted" style="text-align:center">…y ${lista.length - 50} más</td></tr>`;
   }
 }
 document.getElementById('soloAlta').addEventListener('change', renderPreviewTabla);
