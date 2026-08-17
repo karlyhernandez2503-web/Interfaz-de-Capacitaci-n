@@ -1118,6 +1118,7 @@ function renderResumen(){
 
 let cursosExpandidos = new Set();
 function toggleCursoDetalle(id){
+  id = String(id);
   if(cursosExpandidos.has(id)) cursosExpandidos.delete(id);
   else cursosExpandidos.add(id);
   renderCursos();
@@ -1132,7 +1133,7 @@ function renderCursos(){
     const est = estadoVencimiento(c);
     const parts = participantesDe(c.ID);
     const nombres = parts.map(p=>p.EmpleadoNombre).join(', ') || '—';
-    const expandido = cursosExpandidos.has(c.ID);
+    const expandido = cursosExpandidos.has(String(c.ID));
     const noAprobaron = parts.filter(p => p.Aprobado === 'NO').length;
     const filaPrincipal = `<tr>
       <td>
