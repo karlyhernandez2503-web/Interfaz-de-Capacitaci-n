@@ -1154,9 +1154,14 @@ function renderCursos(){
     if(!expandido) return filaPrincipal;
 
     const detalle = parts.length
-      ? parts.map(p => `<span class="badge ${p.Aprobado === 'NO' ? 'badge-danger' : 'badge-ok'}" style="margin:3px 6px 3px 0">
-          ${escapeHtml(p.EmpleadoNombre)} ${p.Aprobado === 'NO' ? '✗ No aprobó' : '✓ Aprobó'}
-        </span>`).join('')
+      ? `<div style="display:flex;flex-direction:column;gap:8px">` +
+        parts.map(p => `
+          <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:#fff;border:1px solid var(--line);border-radius:8px">
+            <span class="badge badge-neutral" style="flex:0 0 auto">Ficha ${escapeHtml(p.EmpleadoID)}</span>
+            <span style="flex:1">${escapeHtml(p.EmpleadoNombre)}</span>
+            <span class="badge ${p.Aprobado === 'NO' ? 'badge-danger' : 'badge-ok'}" style="flex:0 0 auto">${p.Aprobado === 'NO' ? '✗ No aprobó' : '✓ Aprobó'}</span>
+          </div>`).join('') +
+        `</div>`
       : '<span class="muted">Sin participantes registrados</span>';
 
     return filaPrincipal + `<tr><td colspan="7" style="background:#faf5fe;padding:14px 18px">${detalle}</td></tr>`;
