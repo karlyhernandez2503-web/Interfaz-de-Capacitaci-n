@@ -225,6 +225,16 @@
     </div>
     <label>URL de Apps Script (API_URL)</label>
     <input type="text" id="inputApiUrl" placeholder="https://script.google.com/macros/s/XXXXXXXX/exec">
+
+    <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--line)">
+      <h2 style="margin:0 0 4px;font-size:16px">📄 Datos para el reporte SIRCE (STPS)</h2>
+      <p class="section-sub" style="margin-top:2px">Clave de establecimiento asignada por la STPS — es la misma para todos los registros que exportes.</p>
+      <label>Clave de establecimiento</label>
+      <input type="text" id="inputClaveEstablecimiento" placeholder="Ej. 160569">
+      <button class="btn btn-ghost btn-sm" id="btnGuardarEstablecimiento" style="margin-top:10px">Guardar clave de establecimiento</button>
+      <div id="establecimientoMsg" style="margin-top:8px;font-size:12.5px"></div>
+    </div>
+
     <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
       <button class="btn btn-primary" id="btnGuardarApiUrl">Guardar y conectar</button>
       <button class="btn btn-ghost" id="btnCerrarConfig">Cerrar</button>
@@ -238,6 +248,7 @@
   <button class="tab-btn" data-view="cursos">Registrar curso</button>
   <button class="tab-btn" data-view="listaCursos">Cursos</button>
   <button class="tab-btn" data-view="empleados">Empleados y horas</button>
+  <button class="tab-btn" data-view="sirce">SIRCE (STPS)</button>
 </nav>
 
 <main>
@@ -298,6 +309,48 @@
           <label>Fecha de vencimiento</label>
           <input type="date" id="cFechaVenc">
         </div>
+
+        <details style="margin-top:18px">
+          <summary style="cursor:pointer;color:var(--p5);font-weight:600;font-size:13.5px">📄 Datos para el reporte SIRCE (STPS) — opcional</summary>
+          <div style="margin-top:10px">
+            <label>Área temática</label>
+            <input type="text" id="cAreaTematica" list="dlAreasTematicas" placeholder="Escribe para buscar…" autocomplete="off">
+            <datalist id="dlAreasTematicas"></datalist>
+
+            <div class="row">
+              <div>
+                <label>Modalidad</label>
+                <select id="cModalidad"><option value="">— Selecciona —</option></select>
+              </div>
+              <div>
+                <label>Tipo de agente capacitador</label>
+                <select id="cTipoAgente"><option value="">— Selecciona —</option></select>
+              </div>
+            </div>
+
+            <div class="row">
+              <div>
+                <label>RFC del agente capacitador (STPS)</label>
+                <input type="text" id="cRfcAgente" placeholder="Ej. GOHJ720614J51">
+              </div>
+              <div>
+                <label>Objetivo de la capacitación</label>
+                <select id="cObjetivo"><option value="">— Selecciona —</option></select>
+              </div>
+            </div>
+
+            <details style="margin-top:14px">
+              <summary style="cursor:pointer;color:var(--ink-soft);font-weight:600;font-size:12.5px">+ Este curso otorga una norma de competencia (CONOCER) — opcional</summary>
+              <div style="margin-top:10px">
+                <label>Clave de la norma de competencia</label>
+                <input type="text" id="cClaveCompetencia" list="dlNormas" placeholder="Escribe para buscar…" autocomplete="off">
+                <datalist id="dlNormas"></datalist>
+                <label>Fecha de emisión del certificado</label>
+                <input type="date" id="cFechaEmisionCert">
+              </div>
+            </details>
+          </div>
+        </details>
 
         <div style="margin-top:22px">
           <button class="btn btn-primary" id="btnGuardarCurso">Guardar curso</button>
@@ -418,6 +471,57 @@
     </div>
   </section>
 
+  <!-- SIRCE -->
+  <section id="view-sirce" class="view">
+    <h2>Reporte SIRCE (STPS)</h2>
+    <p class="section-sub">
+      Genera el archivo en el formato oficial de la Plantilla SIRCE (hojas CONSTANCIAS y NORMAS) a
+      partir de los cursos y empleados capturados. Las claves de catálogo (estado, municipio,
+      ocupación, escolaridad, documento probatorio, institución) se calculan automáticamente al
+      subir el catálogo de empleados; las del curso (área temática, modalidad, agente, objetivo) se
+      capturan al registrar cada curso.
+    </p>
+
+    <div id="sirceAvisoConfig" class="alert-banner hidden">
+      <div>⚠️</div>
+      <div>
+        Falta capturar la <b>Clave de establecimiento</b> en ⚙️ Configuración — es obligatoria
+        para el reporte SIRCE y se aplica igual a todas las filas.
+      </div>
+    </div>
+
+    <div class="filter-bar">
+      <div>
+        <label>Mes de impartición</label>
+        <select id="filtroSirceMes"><option value="">Todos los meses</option></select>
+      </div>
+      <div>
+        <label>Curso</label>
+        <select id="filtroSirceCurso"><option value="">Todos los cursos</option></select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-ghost btn-sm" id="btnLimpiarFiltrosSirce">Limpiar filtros</button>
+        <button class="btn btn-primary btn-sm" id="btnExportSirce">📄 Descargar plantilla SIRCE (.xlsx)</button>
+      </div>
+    </div>
+
+    <div class="kpis" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:18px">
+      <div class="kpi"><div class="num" id="kpiSirceFilas">0</div><div class="label">Filas a exportar</div></div>
+      <div class="kpi"><div class="num" id="kpiSirceCompletas">0</div><div class="label">Sin advertencias</div></div>
+      <div class="kpi"><div class="num" id="kpiSirceConAvisos">0</div><div class="label">Con datos faltantes</div></div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>CURP</th><th>Empleado</th><th>Curso</th><th>Fecha</th>
+          <th>Clave ocupación</th><th>Estado</th>
+        </tr></thead>
+        <tbody id="tblSirce"><tr><td colspan="6" class="empty-state">Sin registros que mostrar</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
 </main>
 
 <!-- MODAL DE VISTA PREVIA DE CARGA -->
@@ -446,6 +550,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="sirce-catalogos.js"></script>
 <script>
 /* =========================================================
    CONFIGURACIÓN — la URL del Web App de Apps Script se
@@ -457,9 +562,156 @@ const API_URL_STORAGE_KEY = 'capacitacion_api_url';
 function getApiUrl(){ return localStorage.getItem(API_URL_STORAGE_KEY) || ''; }
 function setApiUrl(url){ localStorage.setItem(API_URL_STORAGE_KEY, url); }
 
-let STATE = { empleados: [], cursos: [], participaciones: [] };
+let STATE = { empleados: [], cursos: [], participaciones: [], config: {} };
 let seleccionEmpleados = new Set();
 let catalogoParaCargar = [];
+
+/* =========================================================
+   SIRCE (STPS) — utilidades de catálogos y mapeo automático
+   ========================================================= */
+const SC = window.SIRCE_CATALOGOS || {
+  estados:[], municipios:[], ocupaciones:[], normas:[], areasTematicas:[],
+  docProbatorio:[], tiposAgente:[], modalidades:[], instituciones:[], escolaridad:[], objetivos:[]
+};
+
+function normTxt(s){
+  return (s||'').toString().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+}
+
+function matchCatalogo(catalogo, texto){
+  const t = normTxt(texto);
+  if(!t) return '';
+  let hit = catalogo.find(([,desc]) => normTxt(desc) === t);
+  if(hit) return hit[0];
+  hit = catalogo.find(([,desc]) => { const dn = normTxt(desc); return dn.includes(t) || t.includes(dn); });
+  return hit ? hit[0] : '';
+}
+
+function matchMunicipio(ciudadText, estadoDescTexto){
+  const estadoN = normTxt(estadoDescTexto);
+  if(!estadoN) return '';
+  const candidatos = SC.municipios.filter(m => { const en = normTxt(m[2]); return en === estadoN || en.includes(estadoN) || estadoN.includes(en); });
+  const t = normTxt(ciudadText);
+  if(!t || !candidatos.length) return '';
+  let hit = candidatos.find(m => normTxt(m[1]) === t);
+  if(!hit) hit = candidatos.find(m => { const mn = normTxt(m[1]); return mn.includes(t) || t.includes(mn); });
+  return hit ? hit[0] : '';
+}
+
+const MAPA_ESCOLARIDAD = {
+  'NINGUNO':'1','NINGUNA':'1','SIN ESTUDIOS':'1',
+  'PRIMARIA':'2',
+  'SECUNDARIA':'3',
+  'PREPARATORIA':'4','BACHILLERATO':'4','MEDIA SUPERIOR':'4','TECNICO':'4',
+  'CARRERA TECNICA':'5','TECNICA':'5','TECNICO SUPERIOR':'5',
+  'PROFESIONAL':'6','LICENCIATURA':'6','INGENIERIA':'6','UNIVERSIDAD':'6',
+  'ESPECIALIDAD':'7',
+  'MAESTRIA':'8',
+  'DOCTORADO':'9'
+};
+function mapEscolaridadClave(texto){
+  const t = normTxt(texto);
+  if(!t) return '';
+  if(MAPA_ESCOLARIDAD[t]) return MAPA_ESCOLARIDAD[t];
+  const key = Object.keys(MAPA_ESCOLARIDAD).find(k => t.includes(k));
+  return key ? MAPA_ESCOLARIDAD[key] : '';
+}
+
+function mapDocProbatorioClave(texto){
+  const t = normTxt(texto);
+  if(!t) return '5'; // Ninguno
+  if(t.includes('TITULO')) return '1';
+  if(t.includes('CERTIFICADO')) return '2';
+  if(t.includes('DIPLOMA')) return '3';
+  return '4'; // Otro (incluye Cédula y valores no reconocidos)
+}
+
+function mapInstitucionClave(texto){
+  const t = normTxt(texto);
+  if(t.includes('PUBLIC')) return '1';
+  if(t.includes('PRIVAD')) return '2';
+  return '3'; // Ninguna
+}
+
+// Índice de palabras -> ocupaciones, para no comparar contra las 4,700+ filas por cada empleado
+let OCUPACIONES_INDEX = null;
+function construirIndiceOcupaciones(){
+  const idx = new Map();
+  SC.ocupaciones.forEach(([clave, desc]) => {
+    const dn = normTxt(desc);
+    const palabras = new Set(dn.split(/[\s\-\/,]+/).filter(w => w.length > 3));
+    palabras.forEach(w => {
+      if(!idx.has(w)) idx.set(w, []);
+      idx.get(w).push(clave);
+    });
+  });
+  return idx;
+}
+function mapOcupacionClave(puestoTexto){
+  if(!OCUPACIONES_INDEX) OCUPACIONES_INDEX = construirIndiceOcupaciones();
+  const t = normTxt(puestoTexto);
+  if(!t) return { clave:'', revisar:true };
+  const palabras = t.split(/[\s\-\/,]+/).filter(w => w.length > 3);
+  if(!palabras.length) return { clave:'', revisar:true };
+  const puntajes = new Map();
+  palabras.forEach(w => {
+    const lista = OCUPACIONES_INDEX.get(w);
+    if(lista) lista.forEach(clave => puntajes.set(clave, (puntajes.get(clave)||0) + 1));
+  });
+  if(!puntajes.size) return { clave:'', revisar:true };
+  let mejorClave = '', mejorPuntaje = 0;
+  puntajes.forEach((score, clave) => { if(score > mejorPuntaje){ mejorPuntaje = score; mejorClave = clave; } });
+  const fuerte = mejorPuntaje >= Math.max(1, Math.ceil(palabras.length * 0.6));
+  return { clave: mejorClave, revisar: !fuerte };
+}
+
+// Calcula todas las claves SIRCE derivadas de un empleado a partir de sus datos de catálogo
+function calcularClavesSirce(emp){
+  const estadoClave = matchCatalogo(SC.estados, emp.Estado);
+  const estadoDesc = estadoClave ? (SC.estados.find(e => e[0] === estadoClave) || [])[1] : '';
+  const municipioClave = matchMunicipio(emp.Ciudad, estadoDesc || emp.Estado);
+  const ocupacion = mapOcupacionClave(emp.Puesto);
+  return {
+    EstadoClave: estadoClave,
+    MunicipioClave: municipioClave,
+    NivEstudiosClave: mapEscolaridadClave(emp.Escolaridad),
+    DocProbatorioClave: mapDocProbatorioClave(emp.DocEscolaridad),
+    InstitucionClave: mapInstitucionClave(emp.TipoEscuela),
+    OcupacionClave: ocupacion.clave,
+    OcupacionRevisar: ocupacion.revisar
+  };
+}
+
+function poblarDatalist(id, catalogo){
+  const dl = document.getElementById(id);
+  if(!dl) return;
+  dl.innerHTML = catalogo.map(([clave, desc]) => `<option value="${escapeHtml(clave + ' - ' + desc)}">`).join('');
+}
+function poblarSelectCatalogo(id, catalogo){
+  const sel = document.getElementById(id);
+  if(!sel) return;
+  const placeholder = sel.options[0];
+  sel.innerHTML = '';
+  sel.appendChild(placeholder);
+  catalogo.forEach(([clave, desc]) => {
+    const opt = document.createElement('option');
+    opt.value = clave;
+    opt.textContent = clave + ' - ' + desc;
+    sel.appendChild(opt);
+  });
+}
+function claveDeDatalistInput(inputId){
+  const val = (document.getElementById(inputId).value || '').trim();
+  const m = val.match(/^(\S+)\s*-/);
+  return m ? m[1] : '';
+}
+function inicializarCatalogosFormulario(){
+  poblarDatalist('dlAreasTematicas', SC.areasTematicas);
+  poblarDatalist('dlNormas', SC.normas);
+  poblarSelectCatalogo('cModalidad', SC.modalidades);
+  poblarSelectCatalogo('cTipoAgente', SC.tiposAgente);
+  poblarSelectCatalogo('cObjetivo', SC.objetivos);
+}
 
 // ---------- utilidades ----------
 function toast(msg, isError){
@@ -607,11 +859,31 @@ async function cargarDatos(){
 const configOverlay = document.getElementById('configOverlay');
 function abrirConfig(){
   document.getElementById('inputApiUrl').value = getApiUrl();
+  document.getElementById('inputClaveEstablecimiento').value = (STATE.config && STATE.config.ClaveEstablecimiento) || '';
   document.getElementById('configMsg').textContent = '';
+  document.getElementById('establecimientoMsg').textContent = '';
   configOverlay.classList.remove('hidden');
 }
 document.getElementById('btnConfig').addEventListener('click', abrirConfig);
 document.getElementById('btnCerrarConfig').addEventListener('click', ()=> configOverlay.classList.add('hidden'));
+
+document.getElementById('btnGuardarEstablecimiento').addEventListener('click', async ()=>{
+  const val = document.getElementById('inputClaveEstablecimiento').value.trim();
+  const msg = document.getElementById('establecimientoMsg');
+  if(!val){ msg.style.color='var(--danger)'; msg.textContent='Escribe la clave de establecimiento.'; return; }
+  msg.style.color = 'var(--p5)';
+  msg.textContent = 'Guardando…';
+  try{
+    await apiPost({action:'setConfig', config:{ClaveEstablecimiento: val}});
+    await cargarDatos();
+    msg.style.color = 'var(--ok)';
+    msg.textContent = '✔ Guardada.';
+  }catch(err){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Error al guardar: ' + err.message;
+  }
+});
+
 document.getElementById('btnGuardarApiUrl').addEventListener('click', async ()=>{
   const val = document.getElementById('inputApiUrl').value.trim();
   const msg = document.getElementById('configMsg');
@@ -648,6 +920,7 @@ function render(){
   renderResumen();
   renderCursos();
   renderEmpleadosTabla();
+  renderSirce();
 }
 
 function horasDe(empleadoId){
@@ -714,6 +987,9 @@ function poblarFiltros(){
   poblarSelect(document.getElementById('filtroEmpMes'), meses, mesLabel);
   poblarSelect(document.getElementById('filtroEmpCurso'), nombresCursos);
   poblarSelect(document.getElementById('filtroEmpPlanta'), plantas);
+
+  poblarSelect(document.getElementById('filtroSirceMes'), meses, mesLabel);
+  poblarSelect(document.getElementById('filtroSirceCurso'), nombresCursos);
 }
 
 function getFiltrosCursos(){
@@ -941,6 +1217,160 @@ document.getElementById('btnExportEmpleados').addEventListener('click', ()=>{
   XLSX.writeFile(wb, nombreArchivoFecha('Empleados_horas_capacitacion'));
 });
 
+/* =========================================================
+   SIRCE (STPS) — pestaña de generación de reporte
+   ========================================================= */
+const CONSTANCIAS_HEADERS = [
+  'CURP','NOMBRE','PRIMER APELLIDO','SEGUNDO APELLIDO','CLAVE ESTADO','CLAVE MUNICIPIO',
+  'CLAVE OCUPACION','CLAVE NIV ESTUDIOS','CLAVE DOC PROBATORIO','CLAVE INSTITUCION',
+  'CLAVE CURSO','NOMBRE CURSO','CLAVE AREA TEMATICA','DURACION','FEC INICIO','FEC TERMINO',
+  'CLAVE TIP AGENTE','RFC AGENTE STPS','CLAVE MODALIDAD','CLAVE CAPACITACION','CLAVE ESTABLECIMIENTO'
+];
+const NORMAS_HEADERS = ['CURP','CLAVE COMPETENCIA','FECHA EMISION CERTIFICADO','CLAVE ESTABLECIMIENTO'];
+
+function fmtFechaSirce(s){
+  if(!s) return '';
+  const d = new Date(s);
+  if(isNaN(d)) return '';
+  return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+}
+
+function getFiltrosSirce(){
+  return {
+    mes: document.getElementById('filtroSirceMes').value,
+    curso: document.getElementById('filtroSirceCurso').value
+  };
+}
+
+function getParticipacionesSirceFiltradas(){
+  const f = getFiltrosSirce();
+  return STATE.participaciones.filter(p => {
+    if(f.mes && mesKey(p.FechaImparticion) !== f.mes) return false;
+    if(f.curso && p.CursoNombre !== f.curso) return false;
+    return true;
+  });
+}
+
+function construirFilaSirce(p){
+  const emp = empleadoPorId(p.EmpleadoID) || {};
+  const curso = STATE.cursos.find(c => String(c.ID) === String(p.CursoID)) || {};
+  const claveEstablecimiento = (STATE.config && STATE.config.ClaveEstablecimiento) || '';
+
+  const problemas = [];
+  if(!emp.CURP) problemas.push('CURP');
+  if(!(emp.NombrePila || emp.Nombre)) problemas.push('Nombre');
+  if(!emp.ApellidoPaterno) problemas.push('Apellido paterno');
+  if(!emp.EstadoClave) problemas.push('Estado');
+  if(!emp.MunicipioClave) problemas.push('Municipio');
+  if(!emp.OcupacionClave) problemas.push('Ocupación');
+  else if(emp.OcupacionRevisar === 'SI') problemas.push('Ocupación (verificar)');
+  if(!emp.NivEstudiosClave) problemas.push('Escolaridad');
+  if(!emp.DocProbatorioClave) problemas.push('Doc. probatorio');
+  if(!emp.InstitucionClave) problemas.push('Institución');
+  if(!curso.AreaTematicaClave) problemas.push('Área temática del curso');
+  if(!curso.ModalidadClave) problemas.push('Modalidad del curso');
+  if(!curso.TipoAgenteClave) problemas.push('Tipo de agente del curso');
+  if(!curso.RFCAgente) problemas.push('RFC del agente');
+  if(!curso.ObjetivoClave) problemas.push('Objetivo de capacitación');
+  if(!claveEstablecimiento) problemas.push('Clave de establecimiento');
+
+  const fila = {
+    'CURP': emp.CURP || '',
+    'NOMBRE': emp.NombrePila || emp.Nombre || '',
+    'PRIMER APELLIDO': emp.ApellidoPaterno || '',
+    'SEGUNDO APELLIDO': emp.ApellidoMaterno || '',
+    'CLAVE ESTADO': emp.EstadoClave || '',
+    'CLAVE MUNICIPIO': emp.MunicipioClave || '',
+    'CLAVE OCUPACION': emp.OcupacionClave || '',
+    'CLAVE NIV ESTUDIOS': emp.NivEstudiosClave || '',
+    'CLAVE DOC PROBATORIO': emp.DocProbatorioClave || '',
+    'CLAVE INSTITUCION': emp.InstitucionClave || '',
+    'CLAVE CURSO': '',
+    'NOMBRE CURSO': curso.Nombre || p.CursoNombre || '',
+    'CLAVE AREA TEMATICA': curso.AreaTematicaClave || '',
+    'DURACION': curso.DuracionHoras || p.DuracionHoras || '',
+    'FEC INICIO': fmtFechaSirce(p.FechaImparticion || curso.FechaImparticion),
+    'FEC TERMINO': fmtFechaSirce(p.FechaImparticion || curso.FechaImparticion),
+    'CLAVE TIP AGENTE': curso.TipoAgenteClave || '',
+    'RFC AGENTE STPS': curso.RFCAgente || '',
+    'CLAVE MODALIDAD': curso.ModalidadClave || '',
+    'CLAVE CAPACITACION': curso.ObjetivoClave || '',
+    'CLAVE ESTABLECIMIENTO': claveEstablecimiento
+  };
+  return { fila, problemas, emp, curso };
+}
+
+document.getElementById('filtroSirceMes').addEventListener('change', renderSirce);
+document.getElementById('filtroSirceCurso').addEventListener('change', renderSirce);
+document.getElementById('btnLimpiarFiltrosSirce').addEventListener('click', ()=>{
+  document.getElementById('filtroSirceMes').value = '';
+  document.getElementById('filtroSirceCurso').value = '';
+  renderSirce();
+});
+
+function renderSirce(){
+  const banner = document.getElementById('sirceAvisoConfig');
+  const claveEstablecimiento = (STATE.config && STATE.config.ClaveEstablecimiento) || '';
+  banner.classList.toggle('hidden', !!claveEstablecimiento);
+
+  const participaciones = getParticipacionesSirceFiltradas();
+  const filas = participaciones.map(construirFilaSirce);
+
+  document.getElementById('kpiSirceFilas').textContent = filas.length;
+  document.getElementById('kpiSirceCompletas').textContent = filas.filter(f => f.problemas.length === 0).length;
+  document.getElementById('kpiSirceConAvisos').textContent = filas.filter(f => f.problemas.length > 0).length;
+
+  const tbody = document.getElementById('tblSirce');
+  if(!filas.length){ tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Sin registros que mostrar con los filtros actuales</td></tr>'; return; }
+
+  const muestra = filas.slice(0, 200);
+  tbody.innerHTML = muestra.map(({fila, problemas}) => {
+    const estado = problemas.length
+      ? `<span class="badge badge-warn" title="${escapeHtml(problemas.join(', '))}">Falta: ${escapeHtml(problemas.slice(0,2).join(', '))}${problemas.length>2 ? ' +'+(problemas.length-2) : ''}</span>`
+      : `<span class="badge badge-ok">Completo</span>`;
+    return `<tr>
+      <td>${escapeHtml(fila['CURP'] || '—')}</td>
+      <td>${escapeHtml([fila['NOMBRE'], fila['PRIMER APELLIDO'], fila['SEGUNDO APELLIDO']].filter(Boolean).join(' ') || '—')}</td>
+      <td>${escapeHtml(fila['NOMBRE CURSO'])}</td>
+      <td>${escapeHtml(fila['FEC INICIO'] || '—')}</td>
+      <td>${escapeHtml(fila['CLAVE OCUPACION'] || '—')}</td>
+      <td>${estado}</td>
+    </tr>`;
+  }).join('');
+  if(filas.length > 200){
+    tbody.innerHTML += `<tr><td colspan="6" class="muted" style="text-align:center">…y ${filas.length - 200} más (se incluyen todas al exportar)</td></tr>`;
+  }
+}
+
+document.getElementById('btnExportSirce').addEventListener('click', ()=>{
+  const participaciones = getParticipacionesSirceFiltradas();
+  if(!participaciones.length){ toast('No hay registros que exportar con los filtros actuales', true); return; }
+
+  const construidas = participaciones.map(construirFilaSirce);
+  const conAvisos = construidas.filter(f => f.problemas.length > 0).length;
+
+  const aoaConstancias = [CONSTANCIAS_HEADERS, ...construidas.map(({fila}) => CONSTANCIAS_HEADERS.map(h => fila[h]))];
+  const wsConstancias = XLSX.utils.aoa_to_sheet(aoaConstancias);
+
+  const filasNormas = construidas.filter(({curso}) => curso.ClaveCompetencia && curso.FechaEmisionCertificado);
+  const claveEstablecimiento = (STATE.config && STATE.config.ClaveEstablecimiento) || '';
+  const aoaNormas = [NORMAS_HEADERS, ...filasNormas.map(({emp, curso}) => [
+    emp.CURP || '', curso.ClaveCompetencia || '', fmtFechaSirce(curso.FechaEmisionCertificado), claveEstablecimiento
+  ])];
+  const wsNormas = XLSX.utils.aoa_to_sheet(aoaNormas);
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsConstancias, 'CONSTANCIAS');
+  XLSX.utils.book_append_sheet(wb, wsNormas, 'NORMAS');
+  XLSX.writeFile(wb, nombreArchivoFecha('SIRCE'));
+
+  if(conAvisos > 0){
+    toast(`Descargado con ${conAvisos} fila(s) con datos faltantes — revísalas antes de subir a SIRCE`, true);
+  } else {
+    toast('Plantilla SIRCE descargada correctamente');
+  }
+});
+
 function renderPicker(){
   const filtro = (document.getElementById('empBuscar').value || '').toLowerCase();
   const cont = document.getElementById('empListaPicker');
@@ -1012,7 +1442,14 @@ document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
         FechaImparticion: fecha,
         DuracionHoras: duracion,
         TieneVencimiento: tieneVenc,
-        FechaVencimiento: tieneVenc ? fechaVenc : ''
+        FechaVencimiento: tieneVenc ? fechaVenc : '',
+        AreaTematicaClave: claveDeDatalistInput('cAreaTematica'),
+        ModalidadClave: document.getElementById('cModalidad').value,
+        TipoAgenteClave: document.getElementById('cTipoAgente').value,
+        RFCAgente: document.getElementById('cRfcAgente').value.trim().toUpperCase(),
+        ObjetivoClave: document.getElementById('cObjetivo').value,
+        ClaveCompetencia: claveDeDatalistInput('cClaveCompetencia'),
+        FechaEmisionCertificado: document.getElementById('cFechaEmisionCert').value
       },
       empleadoIds: Array.from(seleccionEmpleados)
     });
@@ -1023,6 +1460,13 @@ document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
     document.getElementById('cVencimiento').checked=false;
     document.getElementById('cFechaVenc').value='';
     document.getElementById('cFechaVencWrap').style.display='none';
+    document.getElementById('cAreaTematica').value='';
+    document.getElementById('cModalidad').value='';
+    document.getElementById('cTipoAgente').value='';
+    document.getElementById('cRfcAgente').value='';
+    document.getElementById('cObjetivo').value='';
+    document.getElementById('cClaveCompetencia').value='';
+    document.getElementById('cFechaEmisionCert').value='';
     seleccionEmpleados.clear();
     await cargarDatos();
   }catch(err){ toast('Error al guardar curso: ' + err.message, true); }
@@ -1060,6 +1504,9 @@ fileInput.addEventListener('change', (e)=>{
       const idx = (name) => headers.indexOf(name);
       const iCodigo = idx('CODIGO');
       const iNombreCompleto = idx('NOMBRE_COMPLETO');
+      const iNombrePila = idx('NOMBRE');
+      const iApPaterno = idx('APELLIDOPATERNO');
+      const iApMaterno = idx('APELLIDOMATERNO');
       const iDepto = idx('DEPARTAMENTO');
       const iPuesto = idx('PUESTO');
       const iEstatus = idx('ESTATUS');
@@ -1079,19 +1526,26 @@ fileInput.addEventListener('change', (e)=>{
 
       const get = (row, i) => (i >= 0 && row[i] !== undefined) ? String(row[i]).trim() : '';
 
-      catalogoParaCargar = grid.slice(1).map(row => ({
-        ID: get(row, iCodigo),
-        Nombre: get(row, iNombreCompleto), // solo nombre completo — se ignora Nombre/ApellidoPaterno/ApellidoMaterno por separado
-        Departamento: get(row, iDepto),
-        Puesto: get(row, iPuesto),
-        Estatus: (get(row, iEstatus) || 'ALTA').toUpperCase(),
-        CURP: get(row, iCurp),
-        Escolaridad: get(row, iEscolaridad),
-        Ciudad: get(row, iCiudad),
-        Estado: get(row, iEstado),
-        TipoEscuela: get(row, iTipoEscuela),
-        DocEscolaridad: get(row, iDocEscolaridad)
-      })).filter(r => r.ID && r.Nombre);
+      catalogoParaCargar = grid.slice(1).map(row => {
+        const emp = {
+          ID: get(row, iCodigo),
+          Nombre: get(row, iNombreCompleto), // nombre completo — es lo único que se muestra en el dashboard
+          NombrePila: get(row, iNombrePila),           // se guarda oculto, solo para el reporte SIRCE
+          ApellidoPaterno: get(row, iApPaterno),        // ídem
+          ApellidoMaterno: get(row, iApMaterno),        // ídem
+          Departamento: get(row, iDepto),
+          Puesto: get(row, iPuesto),
+          Estatus: (get(row, iEstatus) || 'ALTA').toUpperCase(),
+          CURP: get(row, iCurp),
+          Escolaridad: get(row, iEscolaridad),
+          Ciudad: get(row, iCiudad),
+          Estado: get(row, iEstado),
+          TipoEscuela: get(row, iTipoEscuela),
+          DocEscolaridad: get(row, iDocEscolaridad)
+        };
+        Object.assign(emp, calcularClavesSirce(emp));
+        return emp;
+      }).filter(r => r.ID && r.Nombre);
 
       if(!catalogoParaCargar.length){
         toast('No se encontraron filas válidas. Verifica las columnas CODIGO y NOMBRE_COMPLETO', true);
@@ -1176,6 +1630,7 @@ document.getElementById('btnConfirmarCarga').addEventListener('click', async ()=
 });
 
 // ---------- init ----------
+inicializarCatalogosFormulario();
 cargarDatos();
 </script>
 </body>
