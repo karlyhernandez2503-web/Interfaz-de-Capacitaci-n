@@ -365,6 +365,20 @@
         </div>
         <div class="emp-count"><span id="empSeleccionados">0</span> empleado(s) seleccionado(s)</div>
 
+        <div class="checkbox-line" style="margin-top:16px;gap:16px">
+          <span style="font-weight:600;font-size:13px">¿Aprobaron todos los participantes?</span>
+          <label style="margin:0;font-weight:400;display:flex;align-items:center;gap:5px">
+            <input type="radio" name="aprobaronTodos" value="si" checked> Sí
+          </label>
+          <label style="margin:0;font-weight:400;display:flex;align-items:center;gap:5px">
+            <input type="radio" name="aprobaronTodos" value="no"> No
+          </label>
+        </div>
+        <div id="noAprobaronWrap" style="display:none;margin-top:10px">
+          <label>Selecciona quién NO aprobó</label>
+          <div class="emp-picker" id="noAprobaronLista"></div>
+        </div>
+
         <details style="margin-top:16px">
           <summary style="cursor:pointer;color:var(--p5);font-weight:600;font-size:13.5px">+ Agregar nuevo empleado al catálogo</summary>
           <div style="margin-top:10px">
@@ -573,6 +587,15 @@ const SC = window.SIRCE_CATALOGOS || {
   estados:[], municipios:[], ocupaciones:[], normas:[], areasTematicas:[],
   docProbatorio:[], tiposAgente:[], modalidades:[], instituciones:[], escolaridad:[], objetivos:[]
 };
+
+// Algunos catálogos traen entidades HTML sin decodificar en el texto
+// (ej. "CASTA&#209;OS" en vez de "CASTAÑOS") — se corrige al leer el archivo.
+function decodeEntidadesHtml(s){
+  if(!s || s.indexOf('&') === -1) return s;
+  const el = document.createElement('textarea');
+  el.innerHTML = s;
+  return el.value;
+}
 
 function normTxt(s){
   return (s||'').toString().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
@@ -1093,6 +1116,13 @@ function renderResumen(){
   }).join('');
 }
 
+let cursosExpandidos = new Set();
+function toggleCursoDetalle(id){
+  if(cursosExpandidos.has(id)) cursosExpandidos.delete(id);
+  else cursosExpandidos.add(id);
+  renderCursos();
+}
+
 function renderCursos(){
   const tbody = document.getElementById('tblCursos');
   const ordenados = getCursosFiltrados();
@@ -1102,15 +1132,33 @@ function renderCursos(){
     const est = estadoVencimiento(c);
     const parts = participantesDe(c.ID);
     const nombres = parts.map(p=>p.EmpleadoNombre).join(', ') || '—';
-    return `<tr>
-      <td>${escapeHtml(c.Nombre)}</td>
+    const expandido = cursosExpandidos.has(c.ID);
+    const noAprobaron = parts.filter(p => p.Aprobado === 'NO').length;
+    const filaPrincipal = `<tr>
+      <td>
+        <button class="btn btn-ghost btn-sm" style="padding:3px 9px;margin-right:6px" onclick="toggleCursoDetalle('${c.ID}')">${expandido ? '▾' : '▸'}</button>
+        ${escapeHtml(c.Nombre)}
+      </td>
       <td>${fmtDate(c.FechaImparticion)}</td>
       <td>${c.DuracionHoras} hrs</td>
       <td>${c.TieneVencimiento === 'SI' ? fmtDate(c.FechaVencimiento) : '—'}</td>
       <td><span class="badge ${est.cls}">${est.label}</span></td>
-      <td title="${escapeHtml(nombres)}">${parts.length} participante(s)</td>
+      <td title="${escapeHtml(nombres)}">
+        ${parts.length} participante(s)
+        ${noAprobaron ? `<span class="badge badge-danger" style="margin-left:6px">${noAprobaron} no aprobó</span>` : ''}
+      </td>
       <td><button class="btn btn-danger btn-sm" onclick="eliminarCurso('${c.ID}')">Eliminar</button></td>
     </tr>`;
+
+    if(!expandido) return filaPrincipal;
+
+    const detalle = parts.length
+      ? parts.map(p => `<span class="badge ${p.Aprobado === 'NO' ? 'badge-danger' : 'badge-ok'}" style="margin:3px 6px 3px 0">
+          ${escapeHtml(p.EmpleadoNombre)} ${p.Aprobado === 'NO' ? '✗ No aprobó' : '✓ Aprobó'}
+        </span>`).join('')
+      : '<span class="muted">Sin participantes registrados</span>';
+
+    return filaPrincipal + `<tr><td colspan="7" style="background:#faf5fe;padding:14px 18px">${detalle}</td></tr>`;
   }).join('');
 }
 
@@ -1387,11 +1435,40 @@ function renderPicker(){
 }
 document.getElementById('empBuscar').addEventListener('input', renderPicker);
 
+let seleccionNoAprobaron = new Set();
+
 function toggleEmp(id, checked){
   if(checked) seleccionEmpleados.add(String(id));
-  else seleccionEmpleados.delete(String(id));
+  else { seleccionEmpleados.delete(String(id)); seleccionNoAprobaron.delete(String(id)); }
   document.getElementById('empSeleccionados').textContent = seleccionEmpleados.size;
+  renderNoAprobaronLista();
 }
+
+function renderNoAprobaronLista(){
+  const cont = document.getElementById('noAprobaronLista');
+  if(!cont) return;
+  const ids = Array.from(seleccionEmpleados);
+  if(!ids.length){ cont.innerHTML = '<div class="muted" style="padding:8px">Primero selecciona a los participantes arriba.</div>'; return; }
+  cont.innerHTML = ids.map(id => {
+    const e = empleadoPorId(id);
+    const nombre = e ? e.Nombre : ('Empleado ' + id);
+    return `<div class="emp-opt">
+      <input type="checkbox" ${seleccionNoAprobaron.has(id) ? 'checked':''} onchange="toggleNoAprobo('${id}', this.checked)">
+      <label style="margin:0;font-weight:400">${escapeHtml(nombre)}</label>
+    </div>`;
+  }).join('');
+}
+function toggleNoAprobo(id, checked){
+  if(checked) seleccionNoAprobaron.add(String(id));
+  else seleccionNoAprobaron.delete(String(id));
+}
+document.querySelectorAll('input[name="aprobaronTodos"]').forEach(radio => {
+  radio.addEventListener('change', ()=>{
+    const esNo = document.querySelector('input[name="aprobaronTodos"]:checked').value === 'no';
+    document.getElementById('noAprobaronWrap').style.display = esNo ? 'block' : 'none';
+    if(esNo) renderNoAprobaronLista();
+  });
+});
 
 function escapeHtml(s){
   return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -1451,7 +1528,8 @@ document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
         ClaveCompetencia: claveDeDatalistInput('cClaveCompetencia'),
         FechaEmisionCertificado: document.getElementById('cFechaEmisionCert').value
       },
-      empleadoIds: Array.from(seleccionEmpleados)
+      empleadoIds: Array.from(seleccionEmpleados),
+      noAprobadosIds: Array.from(seleccionNoAprobaron)
     });
     toast('Curso guardado y horas acumuladas');
     document.getElementById('cNombre').value='';
@@ -1467,7 +1545,10 @@ document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
     document.getElementById('cObjetivo').value='';
     document.getElementById('cClaveCompetencia').value='';
     document.getElementById('cFechaEmisionCert').value='';
+    document.querySelector('input[name="aprobaronTodos"][value="si"]').checked = true;
+    document.getElementById('noAprobaronWrap').style.display = 'none';
     seleccionEmpleados.clear();
+    seleccionNoAprobaron.clear();
     await cargarDatos();
   }catch(err){ toast('Error al guardar curso: ' + err.message, true); }
 });
@@ -1524,7 +1605,7 @@ fileInput.addEventListener('change', (e)=>{
         return;
       }
 
-      const get = (row, i) => (i >= 0 && row[i] !== undefined) ? String(row[i]).trim() : '';
+      const get = (row, i) => (i >= 0 && row[i] !== undefined) ? decodeEntidadesHtml(String(row[i]).trim()) : '';
 
       catalogoParaCargar = grid.slice(1).map(row => {
         const emp = {
