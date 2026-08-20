@@ -436,13 +436,14 @@
 
     <div class="upload-box">
       <div>
-        <b>Cargar catálogo de empleados</b>
+        <b>Carga masiva de empleados</b>
         <div class="muted" style="font-size:12.5px;margin-top:2px">
-          Acepta el archivo Excel/CSV con columnas CODIGO, NOMBRE_COMPLETO, DEPARTAMENTO, PUESTO, ESTATUS.
-          Actualiza empleados existentes (por código) y agrega los nuevos — no borra el historial de horas.
+          Descarga la plantilla, llénala, y súbela. Actualiza empleados existentes (por código)
+          y agrega los nuevos — no borra el historial de horas.
         </div>
       </div>
-      <div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-ghost btn-sm" id="btnDescargarPlantilla">📥 Descargar plantilla</button>
         <input type="file" id="fileCatalogo" accept=".xlsx,.xls,.csv" style="display:none">
         <button class="btn btn-primary btn-sm" id="btnAbrirCatalogo">📤 Subir catálogo</button>
       </div>
@@ -547,6 +548,17 @@
       <input type="checkbox" id="soloAlta" checked>
       <label for="soloAlta" style="margin:0">Cargar solo empleados con estatus ALTA</label>
     </div>
+    <div id="duplicadosWrap" style="display:none;margin-top:12px">
+      <div class="config-box" style="margin-bottom:10px" id="duplicadosMsg"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;margin:0">
+        <input type="radio" name="modoCarga" value="actualizar" checked>
+        Actualizar todos (sobrescribe los que ya existen con los datos de este archivo)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:400;margin-top:8px">
+        <input type="radio" name="modoCarga" value="soloNuevos">
+        Solo agregar los nuevos (no tocar a los que ya existen en el catálogo)
+      </label>
+    </div>
     <div class="table-wrap" style="max-height:280px;margin-top:14px">
       <table>
         <thead><tr><th>Código</th><th>Nombre</th><th>Depto</th><th>Puesto</th><th>Estatus</th><th>CURP</th><th>Escolaridad</th><th>Ciudad</th><th>Estado</th></tr></thead>
@@ -558,6 +570,78 @@
       <button class="btn btn-ghost" id="btnCancelarCarga">Cancelar</button>
     </div>
     <div id="uploadMsg" style="margin-top:12px;font-size:13px"></div>
+  </div>
+</div>
+
+<!-- EDITAR EMPLEADO -->
+<div id="editEmpleadoOverlay" class="config-overlay hidden">
+  <div class="config-modal">
+    <h2 style="margin-top:0">✏️ Editar empleado</h2>
+    <input type="hidden" id="editEmpId">
+
+    <label>N° de empleado</label>
+    <input type="text" id="editEmpIdDisplay" disabled style="background:#f3ecf9">
+
+    <label>Nombre completo</label>
+    <input type="text" id="editEmpNombre">
+
+    <div class="row">
+      <div><label>Puesto</label><input type="text" id="editEmpPuesto"></div>
+      <div><label>Departamento / Planta</label><input type="text" id="editEmpDepto"></div>
+    </div>
+
+    <div class="row">
+      <div>
+        <label>Estatus</label>
+        <select id="editEmpEstatus">
+          <option value="ALTA">ALTA</option>
+          <option value="BAJA">BAJA</option>
+          <option value="PROCESO EN BAJA">PROCESO EN BAJA</option>
+        </select>
+      </div>
+      <div><label>CURP</label><input type="text" id="editEmpCurp"></div>
+    </div>
+
+    <div class="row">
+      <div><label>Escolaridad</label><input type="text" id="editEmpEscolaridad" placeholder="Ej. PREPARATORIA"></div>
+      <div>
+        <label>Documento de escolaridad</label>
+        <select id="editEmpDoc">
+          <option value="">— Ninguno —</option>
+          <option value="TITULO">Título</option>
+          <option value="CERTIFICADO">Certificado</option>
+          <option value="DIPLOMA">Diploma</option>
+          <option value="CEDULA">Cédula</option>
+          <option value="OTRO">Otro</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row">
+      <div><label>Ciudad</label><input type="text" id="editEmpCiudad"></div>
+      <div><label>Estado</label><input type="text" id="editEmpEstado"></div>
+    </div>
+
+    <label>Tipo de escuela</label>
+    <select id="editEmpTipoEscuela">
+      <option value="">— Ninguna —</option>
+      <option value="PUBLICA">Pública</option>
+      <option value="PRIVADA">Privada</option>
+    </select>
+
+    <details style="margin-top:14px">
+      <summary style="cursor:pointer;color:var(--ink-soft);font-weight:600;font-size:12.5px">📄 Clave de ocupación (SIRCE) — se calcula sola, pero puedes corregirla aquí</summary>
+      <div style="margin-top:10px">
+        <input type="text" id="editEmpOcupacion" list="dlOcupacionesEdit" placeholder="Escribe para buscar…" autocomplete="off">
+        <datalist id="dlOcupacionesEdit"></datalist>
+      </div>
+    </details>
+
+    <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btnGuardarEdicionEmpleado">Guardar cambios</button>
+      <button class="btn btn-ghost" id="btnCancelarEdicionEmpleado">Cancelar</button>
+    </div>
+    <div id="editEmpMsg" style="margin-top:10px;font-size:12.5px"></div>
   </div>
 </div>
 
@@ -734,6 +818,7 @@ function inicializarCatalogosFormulario(){
   poblarSelectCatalogo('cModalidad', SC.modalidades);
   poblarSelectCatalogo('cTipoAgente', SC.tiposAgente);
   poblarSelectCatalogo('cObjetivo', SC.objetivos);
+  poblarDatalist('dlOcupacionesEdit', SC.ocupaciones);
 }
 
 // ---------- utilidades ----------
@@ -1203,7 +1288,10 @@ function renderEmpleadosTabla(){
       <td>${escapeHtml(e.Estado||'—')}</td>
       <td title="${escapeHtml(nombresCursos)}">${parts.length}</td>
       <td><b>${horas.toFixed(1).replace(/\.0$/,'')}</b> hrs</td>
-      <td><button class="btn btn-danger btn-sm" onclick="eliminarEmpleado('${e.ID}')">Eliminar</button></td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="abrirEditarEmpleado('${e.ID}')">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarEmpleado('${e.ID}')">Eliminar</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -1576,6 +1664,32 @@ const fileInput = document.getElementById('fileCatalogo');
 
 document.getElementById('btnAbrirCatalogo').addEventListener('click', ()=> fileInput.click());
 
+document.getElementById('btnDescargarPlantilla').addEventListener('click', ()=>{
+  const headers = ['CODIGO','NOMBRE_COMPLETO','NOMBRE','APELLIDOPATERNO','APELLIDOMATERNO','DEPARTAMENTO','PUESTO','CURP','ESTATUS','ESCOLARIDAD','CIUDAD','ESTADO','TIPO_ESCUELA','DOC_ESCOLARIDAD'];
+  const ejemplo = ['10007','JUAN PEREZ GARCIA','JUAN','PEREZ','GARCIA','PLANTA 1','OPERADOR DE MAQUINA','PEGJ800101HCLRRN01','ALTA','PREPARATORIA','MONCLOVA','COAHUILA','PUBLICA','CERTIFICADO'];
+  const ws = XLSX.utils.aoa_to_sheet([headers, ejemplo]);
+  ws['!cols'] = headers.map(()=>({wch:18}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Empleados');
+
+  const ayuda = [
+    ['Columna','Valores aceptados / notas'],
+    ['CODIGO','Número de empleado — es la llave única, no debe repetirse entre empleados distintos.'],
+    ['NOMBRE_COMPLETO','Es lo único que se muestra en el dashboard. NOMBRE/APELLIDOPATERNO/APELLIDOMATERNO se guardan aparte solo para el reporte SIRCE.'],
+    ['ESTATUS','ALTA, BAJA, PROCESO EN BAJA'],
+    ['TIPO_ESCUELA','PUBLICA, PRIVADA'],
+    ['DOC_ESCOLARIDAD','TITULO, CERTIFICADO, DIPLOMA, CEDULA, OTRO'],
+    ['ESCOLARIDAD','Texto libre, ej. PRIMARIA, SECUNDARIA, PREPARATORIA, PROFESIONAL, MAESTRIA, DOCTORADO'],
+    ['CIUDAD / ESTADO','Nombre del municipio / estado — se usa para calcular las claves del reporte SIRCE.'],
+    ['','Borra la fila de ejemplo antes de subir tu archivo real.']
+  ];
+  const wsAyuda = XLSX.utils.aoa_to_sheet(ayuda);
+  wsAyuda['!cols'] = [{wch:20},{wch:75}];
+  XLSX.utils.book_append_sheet(wb, wsAyuda, 'Ayuda');
+
+  XLSX.writeFile(wb, 'Plantilla_Empleados.xlsx');
+});
+
 fileInput.addEventListener('change', (e)=>{
   const file = e.target.files[0];
   if(!file) return;
@@ -1652,7 +1766,24 @@ function filtrarPorEstatus(){
   return soloAlta ? catalogoParaCargar.filter(e => e.Estatus === 'ALTA') : catalogoParaCargar;
 }
 
+function getModoCarga(){
+  const el = document.querySelector('input[name="modoCarga"]:checked');
+  return el ? el.value : 'actualizar';
+}
+
+// Lista final que se va a enviar, aplicando el filtro de estatus y,
+// si el usuario eligió "solo agregar los nuevos", excluyendo duplicados.
+function getListaCargaFinal(){
+  const lista = filtrarPorEstatus();
+  if(getModoCarga() === 'soloNuevos'){
+    const idsExistentes = new Set(STATE.empleados.map(e => String(e.ID)));
+    return lista.filter(e => !idsExistentes.has(String(e.ID)));
+  }
+  return lista;
+}
+
 function mostrarPreviewCarga(){
+  document.querySelector('input[name="modoCarga"][value="actualizar"]').checked = true;
   renderPreviewTabla();
   document.getElementById('uploadMsg').textContent = '';
   uploadOverlay.classList.remove('hidden');
@@ -1662,10 +1793,23 @@ function renderPreviewTabla(){
   const lista = filtrarPorEstatus();
   const total = catalogoParaCargar.length;
   const altas = catalogoParaCargar.filter(e => e.Estatus === 'ALTA').length;
+
+  const idsExistentes = new Set(STATE.empleados.map(e => String(e.ID)));
+  const duplicados = lista.filter(e => idsExistentes.has(String(e.ID)));
+  const wrap = document.getElementById('duplicadosWrap');
+  if(duplicados.length){
+    wrap.style.display = 'block';
+    document.getElementById('duplicadosMsg').innerHTML =
+      `⚠️ <b>${duplicados.length}</b> de estos empleados ya existen en el catálogo (mismo número de empleado). Elige qué hacer con ellos:`;
+  } else {
+    wrap.style.display = 'none';
+  }
+
+  const listaFinal = getListaCargaFinal();
   document.getElementById('uploadSummary').innerHTML =
-    `Archivo leído: <b>${total}</b> filas · <b>${altas}</b> con estatus ALTA. Se cargarán <b>${lista.length}</b> empleados.`;
+    `Archivo leído: <b>${total}</b> filas · <b>${altas}</b> con estatus ALTA. Se cargarán <b>${listaFinal.length}</b> empleados.`;
   const body = document.getElementById('uploadPreviewBody');
-  const muestra = lista.slice(0, 50);
+  const muestra = listaFinal.slice(0, 50);
   body.innerHTML = muestra.map(e => `<tr>
     <td>${escapeHtml(e.ID)}</td><td>${escapeHtml(e.Nombre)}</td>
     <td>${escapeHtml(e.Departamento)}</td><td>${escapeHtml(e.Puesto)}</td>
@@ -1673,20 +1817,21 @@ function renderPreviewTabla(){
     <td>${escapeHtml(e.CURP)}</td><td>${escapeHtml(e.Escolaridad)}</td>
     <td>${escapeHtml(e.Ciudad)}</td><td>${escapeHtml(e.Estado)}</td>
   </tr>`).join('') || '<tr><td colspan="9" class="empty-state">Sin filas con el filtro actual</td></tr>';
-  if(lista.length > 50){
-    body.innerHTML += `<tr><td colspan="9" class="muted" style="text-align:center">…y ${lista.length - 50} más</td></tr>`;
+  if(listaFinal.length > 50){
+    body.innerHTML += `<tr><td colspan="9" class="muted" style="text-align:center">…y ${listaFinal.length - 50} más</td></tr>`;
   }
 }
 document.getElementById('soloAlta').addEventListener('change', renderPreviewTabla);
+document.querySelectorAll('input[name="modoCarga"]').forEach(r => r.addEventListener('change', renderPreviewTabla));
 document.getElementById('btnCancelarCarga').addEventListener('click', ()=>{
   uploadOverlay.classList.add('hidden');
   catalogoParaCargar = [];
 });
 
 document.getElementById('btnConfirmarCarga').addEventListener('click', async ()=>{
-  const lista = filtrarPorEstatus();
+  const lista = getListaCargaFinal();
   const msg = document.getElementById('uploadMsg');
-  if(!lista.length){ msg.style.color='var(--danger)'; msg.textContent='No hay empleados para cargar.'; return; }
+  if(!lista.length){ msg.style.color='var(--danger)'; msg.textContent='No hay empleados para cargar con las opciones actuales.'; return; }
 
   const btn = document.getElementById('btnConfirmarCarga');
   btn.disabled = true;
@@ -1713,6 +1858,80 @@ document.getElementById('btnConfirmarCarga').addEventListener('click', async ()=
     msg.textContent = 'Error al cargar: ' + err.message;
   }finally{
     btn.disabled = false;
+  }
+});
+
+// ---------- editar empleado ----------
+const editEmpleadoOverlay = document.getElementById('editEmpleadoOverlay');
+let empleadoEditando = null;
+
+function abrirEditarEmpleado(id){
+  const emp = empleadoPorId(id);
+  if(!emp){ toast('No se encontró ese empleado', true); return; }
+  empleadoEditando = emp;
+
+  document.getElementById('editEmpId').value = emp.ID;
+  document.getElementById('editEmpIdDisplay').value = emp.ID;
+  document.getElementById('editEmpNombre').value = emp.Nombre || '';
+  document.getElementById('editEmpPuesto').value = emp.Puesto || '';
+  document.getElementById('editEmpDepto').value = emp.Departamento || '';
+  document.getElementById('editEmpEstatus').value = emp.Estatus || 'ALTA';
+  document.getElementById('editEmpCurp').value = emp.CURP || '';
+  document.getElementById('editEmpEscolaridad').value = emp.Escolaridad || '';
+  document.getElementById('editEmpDoc').value = emp.DocEscolaridad || '';
+  document.getElementById('editEmpCiudad').value = emp.Ciudad || '';
+  document.getElementById('editEmpEstado').value = emp.Estado || '';
+  document.getElementById('editEmpTipoEscuela').value = emp.TipoEscuela || '';
+
+  const ocDesc = emp.OcupacionClave ? (SC.ocupaciones.find(o => o[0] === String(emp.OcupacionClave)) || [])[1] : '';
+  document.getElementById('editEmpOcupacion').value = emp.OcupacionClave ? (emp.OcupacionClave + ' - ' + (ocDesc || '')) : '';
+
+  document.getElementById('editEmpMsg').textContent = '';
+  editEmpleadoOverlay.classList.remove('hidden');
+}
+
+document.getElementById('btnCancelarEdicionEmpleado').addEventListener('click', ()=>{
+  editEmpleadoOverlay.classList.add('hidden');
+  empleadoEditando = null;
+});
+
+document.getElementById('btnGuardarEdicionEmpleado').addEventListener('click', async ()=>{
+  if(!empleadoEditando) return;
+  const nombre = document.getElementById('editEmpNombre').value.trim();
+  const msg = document.getElementById('editEmpMsg');
+  if(!nombre){ msg.style.color='var(--danger)'; msg.textContent='El nombre no puede quedar vacío.'; return; }
+
+  const camposEditados = {
+    Nombre: nombre,
+    Puesto: document.getElementById('editEmpPuesto').value.trim(),
+    Departamento: document.getElementById('editEmpDepto').value.trim(),
+    Estatus: document.getElementById('editEmpEstatus').value,
+    CURP: document.getElementById('editEmpCurp').value.trim().toUpperCase(),
+    Escolaridad: document.getElementById('editEmpEscolaridad').value.trim(),
+    DocEscolaridad: document.getElementById('editEmpDoc').value,
+    Ciudad: document.getElementById('editEmpCiudad').value.trim(),
+    Estado: document.getElementById('editEmpEstado').value.trim(),
+    TipoEscuela: document.getElementById('editEmpTipoEscuela').value
+  };
+  // se parte del registro completo (incluye nombre desglosado oculto y demás
+  // campos que no aparecen en este formulario) para no perder nada al guardar
+  const merged = Object.assign({}, empleadoEditando, camposEditados);
+  Object.assign(merged, calcularClavesSirce(merged));
+
+  const ocupacionManual = claveDeDatalistInput('editEmpOcupacion');
+  if(ocupacionManual){ merged.OcupacionClave = ocupacionManual; merged.OcupacionRevisar = false; }
+
+  msg.style.color = 'var(--p5)';
+  msg.textContent = 'Guardando…';
+  try{
+    await apiPost({action:'addEmpleado', empleado: merged});
+    await cargarDatos();
+    editEmpleadoOverlay.classList.add('hidden');
+    empleadoEditando = null;
+    toast('Empleado actualizado');
+  }catch(err){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Error al guardar: ' + err.message;
   }
 });
 
