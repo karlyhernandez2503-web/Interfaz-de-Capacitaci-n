@@ -587,6 +587,9 @@
         </div>
       </div>
 
+      <!-- Mensaje de error/éxito -->
+      <div id="regEmpMsg" style="margin-top:16px;padding:10px;border-radius:4px;font-size:14px;display:none;text-align:center;font-weight:500;"></div>
+
       <div style="display:flex;gap:10px;margin-top:24px;justify-content:flex-end;">
         <button class="btn btn-ghost" id="btnCancelarEmpleado">Cancelar</button>
         <button class="btn btn-primary" id="btnGuardarEmpleado">Guardar empleado</button>
@@ -2147,7 +2150,11 @@ document.getElementById('btnAgregarEmpleadoManual').addEventListener('click', ()
   document.getElementById('regEmpOcupacionClave').value = '';
   document.getElementById('regEmpOcupacionRevisar').value = '';
   
-  document.getElementById('regEmpMsg').textContent = '';
+  // Limpiar mensaje
+  const msgEl = document.getElementById('regEmpMsg');
+  msgEl.textContent = '';
+  msgEl.style.display = 'none';
+  
   registroEmpleadoOverlay.classList.remove('hidden');
   document.getElementById('regEmpId').focus();
 });
@@ -2164,37 +2171,38 @@ document.getElementById('btnGuardarEmpleado').addEventListener('click', async ()
   const fechaAlta = document.getElementById('regEmpFechaAlta').value;
   const msg = document.getElementById('regEmpMsg');
   
+  const mostrarError = (texto) => {
+    msg.style.color = 'var(--danger)';
+    msg.style.backgroundColor = 'rgba(255, 64, 64, 0.1)';
+    msg.textContent = texto;
+    msg.style.display = 'block';
+  };
+  
   // Validaciones
   if(!id){
-    msg.style.color = 'var(--danger)';
-    msg.textContent = '⚠️ El ID de empleado es requerido.';
+    mostrarError('⚠️ El ID de empleado es requerido.');
     return;
   }
   if(!nombre){
-    msg.style.color = 'var(--danger)';
-    msg.textContent = '⚠️ El nombre es requerido.';
+    mostrarError('⚠️ El nombre es requerido.');
     return;
   }
   if(!puesto){
-    msg.style.color = 'var(--danger)';
-    msg.textContent = '⚠️ El puesto es requerido.';
+    mostrarError('⚠️ El puesto es requerido.');
     return;
   }
   if(!depto){
-    msg.style.color = 'var(--danger)';
-    msg.textContent = '⚠️ El departamento/planta es requerido.';
+    mostrarError('⚠️ El departamento/planta es requerido.');
     return;
   }
   if(!fechaAlta){
-    msg.style.color = 'var(--danger)';
-    msg.textContent = '⚠️ La fecha de alta es requerida.';
+    mostrarError('⚠️ La fecha de alta es requerida.');
     return;
   }
   
   // Verificar que el ID no exista ya
   if(empleadoPorId(id)){
-    msg.style.color = 'var(--danger)';
-    msg.textContent = '⚠️ Ya existe un empleado con ese ID.';
+    mostrarError('⚠️ Ya existe un empleado con ese ID.');
     return;
   }
   
@@ -2229,16 +2237,25 @@ document.getElementById('btnGuardarEmpleado').addEventListener('click', async ()
   }
   
   msg.style.color = 'var(--p5)';
+  msg.style.backgroundColor = 'rgba(74, 4, 104, 0.1)';
   msg.textContent = 'Guardando…';
+  msg.style.display = 'block';
   
   try{
     await apiPost({action: 'addEmpleado', empleado: nuevoEmpleado});
     await cargarDatos();
-    registroEmpleadoOverlay.classList.add('hidden');
-    toast('✔ Empleado registrado correctamente');
+    msg.style.color = 'var(--ok)';
+    msg.style.backgroundColor = 'rgba(76, 175, 80, 0.1)';
+    msg.textContent = '✔ Empleado registrado correctamente';
+    msg.style.display = 'block';
+    setTimeout(() => {
+      registroEmpleadoOverlay.classList.add('hidden');
+    }, 1500);
   }catch(err){
     msg.style.color = 'var(--danger)';
+    msg.style.backgroundColor = 'rgba(255, 64, 64, 0.1)';
     msg.textContent = 'Error al guardar: ' + err.message;
+    msg.style.display = 'block';
     console.error(err);
   }
 });
