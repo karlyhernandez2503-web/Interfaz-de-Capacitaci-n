@@ -657,8 +657,6 @@
    este archivo para conectarlo.
    ========================================================= */
 const API_URL_STORAGE_KEY = 'capacitacion_api_url';
-function getApiUrl(){ return localStorage.getItem(API_URL_STORAGE_KEY) || ''; }
-function setApiUrl(url){ localStorage.setItem(API_URL_STORAGE_KEY, url); }
 
 let STATE = { empleados: [], cursos: [], participaciones: [], config: {} };
 let seleccionEmpleados = new Set();
@@ -674,12 +672,7 @@ const SC = window.SIRCE_CATALOGOS || {
 
 // Algunos catálogos traen entidades HTML sin decodificar en el texto
 // (ej. "CASTA&#209;OS" en vez de "CASTAÑOS") — se corrige al leer el archivo.
-function decodeEntidadesHtml(s){
-  if(!s || s.indexOf('&') === -1) return s;
-  const el = document.createElement('textarea');
-  el.innerHTML = s;
-  return el.value;
-}
+
 
 function normTxt(s){
   return (s||'').toString().toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
@@ -705,72 +698,87 @@ function matchMunicipio(ciudadText, estadoDescTexto){
   return hit ? hit[0] : '';
 }
 
-const MAPA_ESCOLARIDAD = {
-  'NINGUNO':'1','NINGUNA':'1','SIN ESTUDIOS':'1',
-  'PRIMARIA':'2',
-  'SECUNDARIA':'3',
-  'PREPARATORIA':'4','BACHILLERATO':'4','MEDIA SUPERIOR':'4','TECNICO':'4',
-  'CARRERA TECNICA':'5','TECNICA':'5','TECNICO SUPERIOR':'5',
-  'PROFESIONAL':'6','LICENCIATURA':'6','INGENIERIA':'6','UNIVERSIDAD':'6',
-  'ESPECIALIDAD':'7',
-  'MAESTRIA':'8',
-  'DOCTORADO':'9'
+const MAPAS_CATALOGO = {
+  escolaridad: {
+    'NINGUNO':'1','NINGUNA':'1','SIN ESTUDIOS':'1',
+    'PRIMARIA':'2',
+    'SECUNDARIA':'3',
+    'PREPARATORIA':'4','BACHILLERATO':'4','MEDIA SUPERIOR':'4','TECNICO':'4',
+    'CARRERA TECNICA':'5','TECNICA':'5','TECNICO SUPERIOR':'5',
+    'PROFESIONAL':'6','LICENCIATURA':'6','INGENIERIA':'6','UNIVERSIDAD':'6',
+    'ESPECIALIDAD':'7',
+    'MAESTRIA':'8',
+    'DOCTORADO':'9'
+  }
 };
-function mapEscolaridadClave(texto){
-  const t = normTxt(texto);
-  if(!t) return '';
-  if(MAPA_ESCOLARIDAD[t]) return MAPA_ESCOLARIDAD[t];
-  const key = Object.keys(MAPA_ESCOLARIDAD).find(k => t.includes(k));
-  return key ? MAPA_ESCOLARIDAD[key] : '';
-}
 
-function mapDocProbatorioClave(texto){
+// Función parametrizada de mapeo de catálogos — consolida 4 funciones anteriores
+function mapCatalogoAClave(tipo, texto){
   const t = normTxt(texto);
-  if(!t) return '5'; // Ninguno
-  if(t.includes('TITULO')) return '1';
-  if(t.includes('CERTIFICADO')) return '2';
-  if(t.includes('DIPLOMA')) return '3';
-  return '4'; // Otro (incluye Cédula y valores no reconocidos)
-}
-
-function mapInstitucionClave(texto){
-  const t = normTxt(texto);
-  if(t.includes('PUBLIC')) return '1';
-  if(t.includes('PRIVAD')) return '2';
-  return '3'; // Ninguna
+  if(!t) {
+    if(tipo === 'docProbatorio') return '5'; // Ninguno
+    if(tipo === 'institucion') return '3'; // Ninguna
+    return '';
+  }
+  
+  if(tipo === 'escolaridad'){
+    const mapa = MAPAS_CATALOGO.escolaridad;
+    if(mapa[t]) return mapa[t];
+    const key = Object.keys(mapa).find(k => t.includes(k));
+    return key ? mapa[key] : '';
+  }
+  
+  if(tipo === 'docProbatorio'){
+    if(t.includes('TITULO')) return '1';
+    if(t.includes('CERTIFICADO')) return '2';
+    if(t.includes('DIPLOMA')) return '3';
+    return '4'; // Otro (incluye Cédula)
+  }
+  
+  if(tipo === 'institucion'){
+    if(t.includes('PUBLIC')) return '1';
+    if(t.includes('PRIVAD')) return '2';
+    return '3'; // Ninguna
+  }
+  
+  return '';
 }
 
 // Índice de palabras -> ocupaciones, para no comparar contra las 4,700+ filas por cada empleado
-let OCUPACIONES_INDEX = null;
-function construirIndiceOcupaciones(){
-  const idx = new Map();
-  SC.ocupaciones.forEach(([clave, desc]) => {
-    const dn = normTxt(desc);
-    const palabras = new Set(dn.split(/[\s\-\/,]+/).filter(w => w.length > 3));
+// Índice de ocupaciones - se construye lazy la primera vez que se usa
+const mapOcupacionClave = (() => {
+  let indice = null;
+  
+  return (puestoTexto) => {
+    // Lazy-build del índice
+    if(!indice){
+      indice = new Map();
+      SC.ocupaciones.forEach(([clave, desc]) => {
+        const dn = normTxt(desc);
+        const palabras = new Set(dn.split(/[\s\-\/,]+/).filter(w => w.length > 3));
+        palabras.forEach(w => {
+          if(!indice.has(w)) indice.set(w, []);
+          indice.get(w).push(clave);
+        });
+      });
+    }
+    
+    const t = normTxt(puestoTexto);
+    if(!t) return { clave:'', revisar:true };
+    const palabras = t.split(/[\s\-\/,]+/).filter(w => w.length > 3);
+    if(!palabras.length) return { clave:'', revisar:true };
+    const puntajes = new Map();
     palabras.forEach(w => {
-      if(!idx.has(w)) idx.set(w, []);
-      idx.get(w).push(clave);
+      const lista = indice.get(w);
+      if(lista) lista.forEach(clave => puntajes.set(clave, (puntajes.get(clave)||0) + 1));
     });
-  });
-  return idx;
-}
-function mapOcupacionClave(puestoTexto){
-  if(!OCUPACIONES_INDEX) OCUPACIONES_INDEX = construirIndiceOcupaciones();
-  const t = normTxt(puestoTexto);
-  if(!t) return { clave:'', revisar:true };
-  const palabras = t.split(/[\s\-\/,]+/).filter(w => w.length > 3);
-  if(!palabras.length) return { clave:'', revisar:true };
-  const puntajes = new Map();
-  palabras.forEach(w => {
-    const lista = OCUPACIONES_INDEX.get(w);
-    if(lista) lista.forEach(clave => puntajes.set(clave, (puntajes.get(clave)||0) + 1));
-  });
-  if(!puntajes.size) return { clave:'', revisar:true };
-  let mejorClave = '', mejorPuntaje = 0;
-  puntajes.forEach((score, clave) => { if(score > mejorPuntaje){ mejorPuntaje = score; mejorClave = clave; } });
-  const fuerte = mejorPuntaje >= Math.max(1, Math.ceil(palabras.length * 0.6));
-  return { clave: mejorClave, revisar: !fuerte };
-}
+    if(!puntajes.size) return { clave:'', revisar:true };
+    let mejorClave = '', mejorPuntaje = 0;
+    puntajes.forEach((score, clave) => { if(score > mejorPuntaje){ mejorPuntaje = score; mejorClave = clave; } });
+    const fuerte = mejorPuntaje >= Math.max(1, Math.ceil(palabras.length * 0.6));
+    return { clave: mejorClave, revisar: !fuerte };
+  };
+})()
 
 // Calcula todas las claves SIRCE derivadas de un empleado a partir de sus datos de catálogo
 function calcularClavesSirce(emp){
@@ -781,31 +789,33 @@ function calcularClavesSirce(emp){
   return {
     EstadoClave: estadoClave,
     MunicipioClave: municipioClave,
-    NivEstudiosClave: mapEscolaridadClave(emp.Escolaridad),
-    DocProbatorioClave: mapDocProbatorioClave(emp.DocEscolaridad),
-    InstitucionClave: mapInstitucionClave(emp.TipoEscuela),
+    NivEstudiosClave: mapCatalogoAClave('escolaridad', emp.Escolaridad),
+    DocProbatorioClave: mapCatalogoAClave('docProbatorio', emp.DocEscolaridad),
+    InstitucionClave: mapCatalogoAClave('institucion', emp.TipoEscuela),
     OcupacionClave: ocupacion.clave,
     OcupacionRevisar: ocupacion.revisar
   };
 }
 
-function poblarDatalist(id, catalogo){
-  const dl = document.getElementById(id);
-  if(!dl) return;
-  dl.innerHTML = catalogo.map(([clave, desc]) => `<option value="${escapeHtml(clave + ' - ' + desc)}">`).join('');
-}
-function poblarSelectCatalogo(id, catalogo){
-  const sel = document.getElementById(id);
-  if(!sel) return;
-  const placeholder = sel.options[0];
-  sel.innerHTML = '';
-  sel.appendChild(placeholder);
-  catalogo.forEach(([clave, desc]) => {
-    const opt = document.createElement('option');
-    opt.value = clave;
-    opt.textContent = clave + ' - ' + desc;
-    sel.appendChild(opt);
-  });
+// Función unificada para poblar datalist o select
+function poblarCatalogo(id, catalogo, tipo='datalist'){
+  const el = document.getElementById(id);
+  if(!el) return;
+  
+  if(tipo === 'datalist' || el.tagName === 'DATALIST'){
+    el.innerHTML = catalogo.map(([clave, desc]) => `<option value="${escapeHtml(clave + ' - ' + desc)}">`).join('');
+  } else {
+    // select
+    const placeholder = el.options[0];
+    el.innerHTML = '';
+    if(placeholder) el.appendChild(placeholder);
+    catalogo.forEach(([clave, desc]) => {
+      const opt = document.createElement('option');
+      opt.value = clave;
+      opt.textContent = clave + ' - ' + desc;
+      el.appendChild(opt);
+    });
+  }
 }
 function claveDeDatalistInput(inputId){
   const val = (document.getElementById(inputId).value || '').trim();
@@ -813,12 +823,12 @@ function claveDeDatalistInput(inputId){
   return m ? m[1] : '';
 }
 function inicializarCatalogosFormulario(){
-  poblarDatalist('dlAreasTematicas', SC.areasTematicas);
-  poblarDatalist('dlNormas', SC.normas);
-  poblarSelectCatalogo('cModalidad', SC.modalidades);
-  poblarSelectCatalogo('cTipoAgente', SC.tiposAgente);
-  poblarSelectCatalogo('cObjetivo', SC.objetivos);
-  poblarDatalist('dlOcupacionesEdit', SC.ocupaciones);
+  poblarCatalogo('dlAreasTematicas', SC.areasTematicas);
+  poblarCatalogo('dlNormas', SC.normas);
+  poblarCatalogo('cModalidad', SC.modalidades, 'select');
+  poblarCatalogo('cTipoAgente', SC.tiposAgente, 'select');
+  poblarCatalogo('cObjetivo', SC.objetivos, 'select');
+  poblarCatalogo('dlOcupacionesEdit', SC.ocupaciones);
 }
 
 // ---------- utilidades ----------
@@ -828,25 +838,19 @@ function toast(msg, isError){
   t.className = 'toast show' + (isError ? ' error' : '');
   setTimeout(()=> t.className = 'toast', 2600);
 }
-function daysUntil(dateStr){
+// Funciones nativas para fechas
+const daysUntil = (dateStr) => {
   if(!dateStr) return null;
-  const today = new Date(); today.setHours(0,0,0,0);
-  const d = new Date(dateStr); d.setHours(0,0,0,0);
+  const today = new Date(new Date().toDateString());
+  const d = new Date(new Date(dateStr).toDateString());
   return Math.round((d - today) / 86400000);
-}
-function fmtDate(s){
+};
+const fmtDate = (s) => {
   if(!s) return '—';
   const d = new Date(s);
-  if(isNaN(d)) return s;
-  return d.toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'});
-}
-function setStatus(online){
-  const dot = document.getElementById('statusDot');
-  const txt = document.getElementById('statusText');
-  dot.className = 'online';
-  if(online){ dot.classList.add('online'); txt.textContent = 'Conectado a Google Sheets'; }
-  else { dot.classList.remove('online'); dot.classList.add('offline'); txt.textContent = 'Sin conexión — revisa API_URL'; }
-}
+  return isNaN(d) ? s : d.toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'});
+};
+
 
 // ---------- navegación ----------
 document.querySelectorAll('.tab-btn').forEach(btn=>{
@@ -930,14 +934,27 @@ function iframePost(payload){
   });
 }
 
+// ---------- Utilidad: actualizar indicador de status ----------
+function updateStatusIndicator(online){
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  if(online){
+    dot.className = 'online';
+    txt.textContent = 'Conectado a Google Sheets';
+  } else {
+    dot.className = 'offline';
+    txt.textContent = 'Sin conexión — revisa API_URL';
+  }
+}
+
 // ---------- API ----------
 async function apiGet(){
-  const url = getApiUrl();
+  const url = localStorage.getItem(API_URL_STORAGE_KEY) || '';
   if(!url) throw new Error('Falta configurar la URL de Apps Script');
   return jsonpRequest(url, {action:'getAll'});
 }
 async function apiPost(payload){
-  const url = getApiUrl();
+  const url = localStorage.getItem(API_URL_STORAGE_KEY) || '';
   if(!url) throw new Error('Falta configurar la URL de Apps Script');
   await iframePost(payload);
   // El formulario oculto no permite leer la respuesta del servidor (por diseño,
@@ -946,19 +963,20 @@ async function apiPost(payload){
 }
 
 async function cargarDatos(){
-  if(!getApiUrl()){
-    setStatus(false);
+  const url = localStorage.getItem(API_URL_STORAGE_KEY) || '';
+  if(!url){
+    updateStatusIndicator(false);
     document.getElementById('statusText').textContent = 'Falta configurar la conexión';
     return;
   }
   try{
     const data = await apiGet();
     STATE = data;
-    setStatus(true);
+    updateStatusIndicator(true);
     render();
   }catch(err){
     console.error(err);
-    setStatus(false);
+    updateStatusIndicator(false);
     toast('No se pudo conectar con Google Sheets. Revisa la URL en Configuración', true);
   }
 }
@@ -966,7 +984,7 @@ async function cargarDatos(){
 // ---------- configuración ----------
 const configOverlay = document.getElementById('configOverlay');
 function abrirConfig(){
-  document.getElementById('inputApiUrl').value = getApiUrl();
+  document.getElementById('inputApiUrl').value = localStorage.getItem(API_URL_STORAGE_KEY) || '';
   document.getElementById('inputClaveEstablecimiento').value = (STATE.config && STATE.config.ClaveEstablecimiento) || '';
   document.getElementById('configMsg').textContent = '';
   document.getElementById('establecimientoMsg').textContent = '';
@@ -1005,12 +1023,12 @@ document.getElementById('btnGuardarApiUrl').addEventListener('click', async ()=>
     msg.style.color='var(--warn)';
     msg.textContent = 'Esta URL no tiene el formato típico (https://script.google.com/macros/s/XXXX/exec). Verifica que sea la correcta antes de continuar. Se guardará de todas formas.';
   }
-  setApiUrl(val);
+  localStorage.setItem(API_URL_STORAGE_KEY, val);
   msg.style.color = 'var(--p5)';
   msg.textContent = 'Conectando…';
   try{
     await cargarDatos();
-    if(getApiUrl()){
+    if(localStorage.getItem(API_URL_STORAGE_KEY)){
       msg.style.color = 'var(--ok)';
       msg.textContent = '✔ Conectado correctamente.';
       setTimeout(()=> configOverlay.classList.add('hidden'), 900);
@@ -1725,7 +1743,11 @@ fileInput.addEventListener('change', (e)=>{
         return;
       }
 
-      const get = (row, i) => (i >= 0 && row[i] !== undefined) ? decodeEntidadesHtml(String(row[i]).trim()) : '';
+      const get = (row, i) => {
+        if(i < 0 || row[i] === undefined) return '';
+        const txt = String(row[i]).trim();
+        return txt.includes('&') ? (() => { const el = document.createElement('textarea'); el.innerHTML = txt; return el.value; })() : txt;
+      };
 
       catalogoParaCargar = grid.slice(1).map(row => {
         const emp = {
