@@ -270,8 +270,8 @@
       <div class="kpi"><div class="num" id="kpiPorVencer">0</div><div class="label">Cursos por vencer (30 días)</div></div>
     </div>
 
-    <h2>⚠️ Nuevos ingresos próximos a cumplir 1 mes</h2>
-    <p class="section-sub">Empleados que faltan ≤5 días para cumplir su primer mes. Se requiere asignación de "Entrenamiento en el trabajo" y "Evaluación de adaptación".</p>
+    <h2>⚠️ Nuevos ingresos: Seguimiento 30 días</h2>
+    <p class="section-sub">Empleados ±5 días alrededor de cumplir su primer mes (antes o después). Se requiere completar "Entrenamiento en el trabajo" y "Evaluación de adaptación".</p>
     <div class="table-wrap">
       <table>
         <thead><tr>
@@ -1342,14 +1342,15 @@ function calcularAlertasNuevosIngresos(){
   const tbody = document.getElementById('tblNuevosIngresos');
   const hoy = new Date();
   
-  // Filtrar empleados con antigüedad < 1 mes + alertas en los últimos 5 días
+  // Filtrar empleados próximos a cumplir 30 días (±5 días alrededor de la fecha)
   const nuevoIngresos = STATE.empleados.filter(e => {
     if(!e.FechaAlta || e.Estatus !== 'ALTA') return false;
     const fechaAlta = new Date(e.FechaAlta);
     const fechaUnMes = new Date(fechaAlta);
     fechaUnMes.setDate(fechaUnMes.getDate() + 30);
     const diasRestantes = daysUntil(fechaUnMes.toISOString().split('T')[0]);
-    return diasRestantes !== null && diasRestantes >= -30 && diasRestantes <= 5 && diasRestantes > -1;
+    // Mostrar si faltan ≤5 días para cumplir 30 días, o si acaban de cumplirlo hace ≤5 días
+    return diasRestantes !== null && diasRestantes >= -5 && diasRestantes <= 5;
   }).sort((a,b) => {
     const getUnMesDays = (emp) => {
       const fechaAlta = new Date(emp.FechaAlta);
