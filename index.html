@@ -954,16 +954,36 @@ function toast(msg, isError){
   setTimeout(()=> t.className = 'toast', 2600);
 }
 // Funciones nativas para fechas
+// IMPORTANTE: new Date('2026-08-20') se interpreta en UTC y en México (UTC-6)
+// resulta ser el 19 de agosto. Por eso toda fecha 'yyyy-MM-dd' se lee como fecha LOCAL.
+const parseFechaLocal = (s) => {
+  if(!s) return null;
+  if(s instanceof Date) return new Date(s.getFullYear(), s.getMonth(), s.getDate());
+  const m = String(s).match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m) return new Date(+m[1], +m[2]-1, +m[3]);
+  const d = new Date(s);
+  return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+};
 const daysUntil = (dateStr) => {
-  if(!dateStr) return null;
-  const today = new Date(new Date().toDateString());
-  const d = new Date(new Date(dateStr).toDateString());
+  const d = parseFechaLocal(dateStr);
+  if(!d) return null;
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return Math.round((d - today) / 86400000);
 };
 const fmtDate = (s) => {
   if(!s) return '—';
-  const d = new Date(s);
-  return isNaN(d) ? s : d.toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'});
+  const d = parseFechaLocal(s);
+  return !d ? s : d.toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'});
+};
+// Días que faltan (+) o ya pasaron (-) para que el empleado cumpla 30 días desde su FechaAlta
+const diasParaUnMes = (emp) => {
+  const alta = parseFechaLocal(emp.FechaAlta);
+  if(!alta) return null;
+  const unMes = new Date(alta.getFullYear(), alta.getMonth(), alta.getDate() + 30);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((unMes - today) / 86400000);
 };
 
 
@@ -1342,24 +1362,12 @@ function calcularAlertasNuevosIngresos(){
   const tbody = document.getElementById('tblNuevosIngresos');
   const hoy = new Date();
   
-  // Filtrar empleados próximos a cumplir 30 días (±5 días alrededor de la fecha)
+  // Ventana de alerta: desde 5 días antes hasta 5 días después de cumplir 30 días
   const nuevoIngresos = STATE.empleados.filter(e => {
-    if(!e.FechaAlta || e.Estatus !== 'ALTA') return false;
-    const fechaAlta = new Date(e.FechaAlta);
-    const fechaUnMes = new Date(fechaAlta);
-    fechaUnMes.setDate(fechaUnMes.getDate() + 30);
-    const diasRestantes = daysUntil(fechaUnMes.toISOString().split('T')[0]);
-    // Mostrar si faltan ≤5 días para cumplir 30 días, o si acaban de cumplirlo hace ≤5 días
-    return diasRestantes !== null && diasRestantes >= -5 && diasRestantes <= 5;
-  }).sort((a,b) => {
-    const getUnMesDays = (emp) => {
-      const fechaAlta = new Date(emp.FechaAlta);
-      const fechaUnMes = new Date(fechaAlta);
-      fechaUnMes.setDate(fechaUnMes.getDate() + 30);
-      return daysUntil(fechaUnMes.toISOString().split('T')[0]) || 999;
-    };
-    return getUnMesDays(a) - getUnMesDays(b);
-  });
+    if(!e.FechaAlta || String(e.Estatus).toUpperCase() !== 'ALTA') return false;
+    const d = diasParaUnMes(e);
+    return d !== null && d >= -5 && d <= 5;
+  }).sort((a,b) => diasParaUnMes(a) - diasParaUnMes(b));
 
   if(!nuevoIngresos.length){
     tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Sin alertas de nuevos ingresos</td></tr>';
@@ -1367,18 +1375,17 @@ function calcularAlertasNuevosIngresos(){
   }
 
   tbody.innerHTML = nuevoIngresos.map(e => {
-    const fechaAlta = new Date(e.FechaAlta);
-    const fechaUnMes = new Date(fechaAlta);
-    fechaUnMes.setDate(fechaUnMes.getDate() + 30);
-    const diasRestantes = daysUntil(fechaUnMes.toISOString().split('T')[0]);
-    
+    const diasRestantes = diasParaUnMes(e);
     const badgeClass = diasRestantes > 2 ? 'badge-warn' : 'badge-danger';
-    
+    const txtDias = diasRestantes > 0 ? `Faltan ${diasRestantes} día${diasRestantes!==1?'s':''}`
+                  : diasRestantes === 0 ? 'Cumple hoy'
+                  : `Cumplió hace ${Math.abs(diasRestantes)} día${diasRestantes!==-1?'s':''}`;
+
     return `<tr>
       <td><b>${escapeHtml(e.Nombre)}</b></td>
       <td>${escapeHtml(e.Puesto||'—')}</td>
       <td>${escapeHtml(e.Departamento||'—')}</td>
-      <td><span class="badge ${badgeClass}">${diasRestantes} día${diasRestantes !== 1 ? 's' : ''}</span></td>
+      <td><span class="badge ${badgeClass}">${txtDias}</span></td>
       <td>
         <span class="badge badge-danger">Entrenamiento en el trabajo</span>
         <span class="badge badge-danger" style="margin-left:4px;">Evaluación de adaptación</span>
