@@ -270,7 +270,18 @@
       <div class="kpi"><div class="num" id="kpiPorVencer">0</div><div class="label">Cursos por vencer (30 días)</div></div>
     </div>
 
-    <h2>Últimos cursos registrados</h2>
+    <h2>⚠️ Nuevos ingresos próximos a cumplir 1 mes</h2>
+    <p class="section-sub">Empleados que faltan ≤5 días para cumplir su primer mes. Se requiere asignación de "Entrenamiento en el trabajo" y "Evaluación de adaptación".</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Empleado</th><th>Puesto</th><th>Planta</th><th>Días restantes</th><th>Formatos pendientes</th><th></th>
+        </tr></thead>
+        <tbody id="tblNuevosIngresos"><tr><td colspan="6" class="empty-state">Sin alertas de nuevos ingresos</td></tr></tbody>
+      </table>
+    </div>
+
+    <h2 style="margin-top:36px;">Últimos cursos registrados</h2>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Curso</th><th>Fecha</th><th>Duración (hrs)</th><th>Vencimiento</th><th>Participantes</th></tr></thead>
@@ -474,17 +485,114 @@
 
     <p class="muted" id="empFiltroNota" style="font-size:12.5px;margin:-6px 0 12px;display:none"></p>
 
+    <!-- Botón para agregar empleado manualmente -->
+    <div style="margin-bottom:16px;display:flex;gap:10px;">
+      <button class="btn btn-primary btn-sm" id="btnAgregarEmpleadoManual">➕ Agregar empleado manual</button>
+    </div>
+
     <div class="table-wrap">
       <table>
         <thead><tr>
           <th>N° Empleado</th><th>Empleado</th><th>Puesto</th><th>Departamento</th><th>Estatus</th>
           <th>CURP</th><th>Escolaridad</th><th>Ciudad</th><th>Estado</th>
-          <th>Cursos tomados</th><th>Horas acumuladas</th><th></th>
+          <th>Fecha alta</th><th>Cursos tomados</th><th>Horas acumuladas</th><th></th>
         </tr></thead>
-        <tbody id="tblEmpleados"><tr><td colspan="12" class="empty-state">Sin empleados en catálogo</td></tr></tbody>
+        <tbody id="tblEmpleados"><tr><td colspan="13" class="empty-state">Sin empleados en catálogo</td></tr></tbody>
       </table>
     </div>
   </section>
+
+  <!-- MODAL: REGISTRO MANUAL DE EMPLEADO -->
+  <div id="registroEmpleadoOverlay" class="config-overlay hidden">
+    <div class="config-modal" style="max-width:720px;">
+      <h2 style="margin-top:0;margin-bottom:18px;">Registrar nuevo empleado</h2>
+      
+      <div class="grid-2">
+        <div>
+          <label>ID Empleado (requerido)</label>
+          <input type="text" id="regEmpId" placeholder="Ej: EMP001">
+        </div>
+        <div>
+          <label>Nombre completo (requerido)</label>
+          <input type="text" id="regEmpNombre" placeholder="Ej: Juan Pérez">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>Puesto (requerido)</label>
+          <input type="text" id="regEmpPuesto" placeholder="Ej: Operador de torno">
+        </div>
+        <div>
+          <label>Departamento / Planta (requerido)</label>
+          <input type="text" id="regEmpDepartamento" placeholder="Ej: Planta Monclova">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>Estatus</label>
+          <select id="regEmpEstatus">
+            <option value="ALTA">ALTA</option>
+            <option value="BAJA">BAJA</option>
+          </select>
+        </div>
+        <div>
+          <label>Fecha de alta (requerido)</label>
+          <input type="date" id="regEmpFechaAlta">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>CURP</label>
+          <input type="text" id="regEmpCurp" placeholder="Ej: PEXA000000HDFMRR00">
+        </div>
+        <div>
+          <label>Escolaridad</label>
+          <input type="text" id="regEmpEscolaridad" placeholder="Ej: Primaria">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>Documento probatorio (Escolaridad)</label>
+          <input type="text" id="regEmpDocEscolaridad" placeholder="Ej: Certificado">
+        </div>
+        <div>
+          <label>Ciudad</label>
+          <input type="text" id="regEmpCiudad" placeholder="Ej: Monclova">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>Estado</label>
+          <input type="text" id="regEmpEstado" placeholder="Ej: Coahuila">
+        </div>
+        <div>
+          <label>Tipo de escuela</label>
+          <input type="text" id="regEmpTipoEscuela" placeholder="Ej: Pública">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div>
+          <label>Ocupación (SIRCE)</label>
+          <input type="text" id="regEmpOcupacionClave" placeholder="Ej: Operador de máquina">
+        </div>
+        <div>
+          <label>Ocupación a revisar</label>
+          <input type="text" id="regEmpOcupacionRevisar" placeholder="Opcional">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:24px;justify-content:flex-end;">
+        <button class="btn btn-ghost" id="btnCancelarEmpleado">Cancelar</button>
+        <button class="btn btn-primary" id="btnGuardarEmpleado">Guardar empleado</button>
+      </div>
+    </div>
+  </div>
 
   <!-- SIRCE -->
   <section id="view-sirce" class="view">
@@ -599,6 +707,10 @@
           <option value="PROCESO EN BAJA">PROCESO EN BAJA</option>
         </select>
       </div>
+      <div><label>Fecha de alta</label><input type="date" id="editEmpFechaAlta"></div>
+    </div>
+
+    <div class="row">
       <div><label>CURP</label><input type="text" id="editEmpCurp"></div>
     </div>
 
@@ -1204,6 +1316,9 @@ function renderResumen(){
     banner.classList.add('hidden');
   }
 
+  // Render alertas de nuevos ingresos
+  calcularAlertasNuevosIngresos();
+
   const ordenados = [...STATE.cursos].sort((a,b) => new Date(b.FechaRegistro||b.FechaImparticion) - new Date(a.FechaRegistro||a.FechaImparticion)).slice(0,8);
   const tbody = document.getElementById('tblResumen');
   if(!ordenados.length){ tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Sin datos aún</td></tr>'; return; }
@@ -1215,6 +1330,58 @@ function renderResumen(){
       <td>${c.DuracionHoras}</td>
       <td><span class="badge ${est.cls}">${est.label}</span></td>
       <td>${participantesDe(c.ID).length}</td>
+    </tr>`;
+  }).join('');
+}
+
+// FUNCIÓN: Calcular alertas de nuevos ingresos
+function calcularAlertasNuevosIngresos(){
+  const tbody = document.getElementById('tblNuevosIngresos');
+  const hoy = new Date();
+  
+  // Filtrar empleados con antigüedad < 1 mes + alertas en los últimos 5 días
+  const nuevoIngresos = STATE.empleados.filter(e => {
+    if(!e.FechaAlta || e.Estatus !== 'ALTA') return false;
+    const fechaAlta = new Date(e.FechaAlta);
+    const fechaUnMes = new Date(fechaAlta);
+    fechaUnMes.setDate(fechaUnMes.getDate() + 30);
+    const diasRestantes = daysUntil(fechaUnMes.toISOString().split('T')[0]);
+    return diasRestantes !== null && diasRestantes >= -30 && diasRestantes <= 5 && diasRestantes > -1;
+  }).sort((a,b) => {
+    const getUnMesDays = (emp) => {
+      const fechaAlta = new Date(emp.FechaAlta);
+      const fechaUnMes = new Date(fechaAlta);
+      fechaUnMes.setDate(fechaUnMes.getDate() + 30);
+      return daysUntil(fechaUnMes.toISOString().split('T')[0]) || 999;
+    };
+    return getUnMesDays(a) - getUnMesDays(b);
+  });
+
+  if(!nuevoIngresos.length){
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Sin alertas de nuevos ingresos</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = nuevoIngresos.map(e => {
+    const fechaAlta = new Date(e.FechaAlta);
+    const fechaUnMes = new Date(fechaAlta);
+    fechaUnMes.setDate(fechaUnMes.getDate() + 30);
+    const diasRestantes = daysUntil(fechaUnMes.toISOString().split('T')[0]);
+    
+    const badgeClass = diasRestantes > 2 ? 'badge-warn' : 'badge-danger';
+    
+    return `<tr>
+      <td><b>${escapeHtml(e.Nombre)}</b></td>
+      <td>${escapeHtml(e.Puesto||'—')}</td>
+      <td>${escapeHtml(e.Departamento||'—')}</td>
+      <td><span class="badge ${badgeClass}">${diasRestantes} día${diasRestantes !== 1 ? 's' : ''}</span></td>
+      <td>
+        <span class="badge badge-danger">Entrenamiento en el trabajo</span>
+        <span class="badge badge-danger" style="margin-left:4px;">Evaluación de adaptación</span>
+      </td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="abrirEditarEmpleado('${e.ID}')">Editar</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -1287,8 +1454,8 @@ function renderEmpleadosTabla(){
     nota.style.display = 'none';
   }
 
-  if(!STATE.empleados.length){ tbody.innerHTML = '<tr><td colspan="12" class="empty-state">Sin empleados en catálogo</td></tr>'; return; }
-  if(!lista.length){ tbody.innerHTML = '<tr><td colspan="12" class="empty-state">Ningún empleado coincide con los filtros</td></tr>'; return; }
+  if(!STATE.empleados.length){ tbody.innerHTML = '<tr><td colspan="13" class="empty-state">Sin empleados en catálogo</td></tr>'; return; }
+  if(!lista.length){ tbody.innerHTML = '<tr><td colspan="13" class="empty-state">Ningún empleado coincide con los filtros</td></tr>'; return; }
 
   tbody.innerHTML = lista.map(e=>{
     const parts = participacionesFiltradas(e.ID, f);
@@ -1304,6 +1471,7 @@ function renderEmpleadosTabla(){
       <td>${escapeHtml(e.Escolaridad||'—')}</td>
       <td>${escapeHtml(e.Ciudad||'—')}</td>
       <td>${escapeHtml(e.Estado||'—')}</td>
+      <td>${escapeHtml(e.FechaAlta ? fmtDate(e.FechaAlta) : '—')}</td>
       <td title="${escapeHtml(nombresCursos)}">${parts.length}</td>
       <td><b>${horas.toFixed(1).replace(/\.0$/,'')}</b> hrs</td>
       <td>
@@ -1898,6 +2066,7 @@ function abrirEditarEmpleado(id){
   document.getElementById('editEmpPuesto').value = emp.Puesto || '';
   document.getElementById('editEmpDepto').value = emp.Departamento || '';
   document.getElementById('editEmpEstatus').value = emp.Estatus || 'ALTA';
+  document.getElementById('editEmpFechaAlta').value = emp.FechaAlta || '';
   document.getElementById('editEmpCurp').value = emp.CURP || '';
   document.getElementById('editEmpEscolaridad').value = emp.Escolaridad || '';
   document.getElementById('editEmpDoc').value = emp.DocEscolaridad || '';
@@ -1928,6 +2097,7 @@ document.getElementById('btnGuardarEdicionEmpleado').addEventListener('click', a
     Puesto: document.getElementById('editEmpPuesto').value.trim(),
     Departamento: document.getElementById('editEmpDepto').value.trim(),
     Estatus: document.getElementById('editEmpEstatus').value,
+    FechaAlta: document.getElementById('editEmpFechaAlta').value,
     CURP: document.getElementById('editEmpCurp').value.trim().toUpperCase(),
     Escolaridad: document.getElementById('editEmpEscolaridad').value.trim(),
     DocEscolaridad: document.getElementById('editEmpDoc').value,
@@ -1954,6 +2124,122 @@ document.getElementById('btnGuardarEdicionEmpleado').addEventListener('click', a
   }catch(err){
     msg.style.color = 'var(--danger)';
     msg.textContent = 'Error al guardar: ' + err.message;
+  }
+});
+
+// ---------- modal de registro manual de empleados ----------
+const registroEmpleadoOverlay = document.getElementById('registroEmpleadoOverlay');
+
+document.getElementById('btnAgregarEmpleadoManual').addEventListener('click', ()=>{
+  // Limpiar formulario
+  document.getElementById('regEmpId').value = '';
+  document.getElementById('regEmpNombre').value = '';
+  document.getElementById('regEmpPuesto').value = '';
+  document.getElementById('regEmpDepartamento').value = '';
+  document.getElementById('regEmpEstatus').value = 'ALTA';
+  document.getElementById('regEmpFechaAlta').value = new Date().toISOString().split('T')[0];
+  document.getElementById('regEmpCurp').value = '';
+  document.getElementById('regEmpEscolaridad').value = '';
+  document.getElementById('regEmpDocEscolaridad').value = '';
+  document.getElementById('regEmpCiudad').value = '';
+  document.getElementById('regEmpEstado').value = '';
+  document.getElementById('regEmpTipoEscuela').value = '';
+  document.getElementById('regEmpOcupacionClave').value = '';
+  document.getElementById('regEmpOcupacionRevisar').value = '';
+  
+  document.getElementById('regEmpMsg').textContent = '';
+  registroEmpleadoOverlay.classList.remove('hidden');
+  document.getElementById('regEmpId').focus();
+});
+
+document.getElementById('btnCancelarEmpleado').addEventListener('click', ()=>{
+  registroEmpleadoOverlay.classList.add('hidden');
+});
+
+document.getElementById('btnGuardarEmpleado').addEventListener('click', async ()=>{
+  const id = document.getElementById('regEmpId').value.trim();
+  const nombre = document.getElementById('regEmpNombre').value.trim();
+  const puesto = document.getElementById('regEmpPuesto').value.trim();
+  const depto = document.getElementById('regEmpDepartamento').value.trim();
+  const fechaAlta = document.getElementById('regEmpFechaAlta').value;
+  const msg = document.getElementById('regEmpMsg');
+  
+  // Validaciones
+  if(!id){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = '⚠️ El ID de empleado es requerido.';
+    return;
+  }
+  if(!nombre){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = '⚠️ El nombre es requerido.';
+    return;
+  }
+  if(!puesto){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = '⚠️ El puesto es requerido.';
+    return;
+  }
+  if(!depto){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = '⚠️ El departamento/planta es requerido.';
+    return;
+  }
+  if(!fechaAlta){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = '⚠️ La fecha de alta es requerida.';
+    return;
+  }
+  
+  // Verificar que el ID no exista ya
+  if(empleadoPorId(id)){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = '⚠️ Ya existe un empleado con ese ID.';
+    return;
+  }
+  
+  const nuevoEmpleado = {
+    ID: id,
+    Nombre: nombre,
+    Puesto: puesto,
+    Departamento: depto,
+    Estatus: document.getElementById('regEmpEstatus').value,
+    FechaAlta: fechaAlta,
+    CURP: document.getElementById('regEmpCurp').value.trim().toUpperCase(),
+    Escolaridad: document.getElementById('regEmpEscolaridad').value.trim(),
+    DocEscolaridad: document.getElementById('regEmpDocEscolaridad').value,
+    Ciudad: document.getElementById('regEmpCiudad').value.trim(),
+    Estado: document.getElementById('regEmpEstado').value.trim(),
+    TipoEscuela: document.getElementById('regEmpTipoEscuela').value,
+    OcupacionClave: '',
+    OcupacionRevisar: false
+  };
+  
+  // Calcular claves SIRCE automáticamente
+  Object.assign(nuevoEmpleado, calcularClavesSirce(nuevoEmpleado));
+  
+  // Si hay ocupación manual, procesarla
+  const ocupacionManual = document.getElementById('regEmpOcupacionClave').value.trim();
+  if(ocupacionManual){
+    const clave = mapOcupacionClave(ocupacionManual);
+    if(clave){
+      nuevoEmpleado.OcupacionClave = clave;
+      nuevoEmpleado.OcupacionRevisar = false;
+    }
+  }
+  
+  msg.style.color = 'var(--p5)';
+  msg.textContent = 'Guardando…';
+  
+  try{
+    await apiPost({action: 'addEmpleado', empleado: nuevoEmpleado});
+    await cargarDatos();
+    registroEmpleadoOverlay.classList.add('hidden');
+    toast('✔ Empleado registrado correctamente');
+  }catch(err){
+    msg.style.color = 'var(--danger)';
+    msg.textContent = 'Error al guardar: ' + err.message;
+    console.error(err);
   }
 });
 
