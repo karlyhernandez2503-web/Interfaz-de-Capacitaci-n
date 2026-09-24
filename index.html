@@ -1009,7 +1009,7 @@ function jsonpRequest(url, params){
 // ---------- Formulario oculto (escritura) — evita el bloqueo de CORS de fetch() ----------
 function iframePost(payload){
   return new Promise((resolve)=>{
-    const url = getApiUrl();
+    const url = localStorage.getItem(API_URL_STORAGE_KEY) || '';
     const iframeName = '__post_' + Date.now();
     const iframe = document.createElement('iframe');
     iframe.name = iframeName;
