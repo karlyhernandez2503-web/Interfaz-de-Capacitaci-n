@@ -571,15 +571,9 @@
         </div>
       </div>
 
-      <div class="grid-2">
-        <div>
-          <label>Ocupación (SIRCE)</label>
-          <input type="text" id="regEmpOcupacionClave" placeholder="Ej: Operador de máquina">
-        </div>
-        <div>
-          <label>Ocupación a revisar</label>
-          <input type="text" id="regEmpOcupacionRevisar" placeholder="Opcional">
-        </div>
+      <div>
+        <label>Ocupación (SIRCE)</label>
+        <input type="text" id="regEmpOcupacionClave" placeholder="Ej: Operador de máquina — si se deja vacío se calcula con el puesto">
       </div>
 
       <!-- Mensaje de error/éxito -->
@@ -683,7 +677,6 @@
 <div id="editEmpleadoOverlay" class="config-overlay hidden">
   <div class="config-modal">
     <h2 style="margin-top:0">✏️ Editar empleado</h2>
-    <input type="hidden" id="editEmpId">
 
     <label>N° de empleado</label>
     <input type="text" id="editEmpIdDisplay" disabled style="background:#f3ecf9">
@@ -783,9 +776,6 @@ const SC = window.SIRCE_CATALOGOS || {
 // Sin catálogos, calcularClavesSirce daría claves vacías y se guardarían encima de las buenas
 const CATALOGOS_OK = SC.estados.length > 0 && SC.ocupaciones.length > 0;
 const MSG_SIN_CATALOGOS = 'No se cargó sirce-catalogos.js (debe estar junto a index.html). Sin él las claves SIRCE se guardarían vacías: cargar, registrar y editar empleados queda bloqueado.';
-
-// Algunos catálogos traen entidades HTML sin decodificar en el texto
-// (ej. "CASTA&#209;OS" en vez de "CASTAÑOS") — se corrige al leer el archivo.
 
 
 function normTxt(s){
@@ -950,11 +940,13 @@ function inicializarCatalogosFormulario(){
 }
 
 // ---------- utilidades ----------
+let toastTimer;
 function toast(msg, isError){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.className = 'toast show' + (isError ? ' error' : '');
-  setTimeout(()=> t.className = 'toast', 2600);
+  clearTimeout(toastTimer); // si no, el temporizador del aviso anterior escondía este antes de tiempo
+  toastTimer = setTimeout(()=> t.className = 'toast', 2600);
 }
 // Funciones nativas para fechas
 // IMPORTANTE: new Date('2026-08-20') se interpreta en UTC y en México (UTC-6)
@@ -1206,23 +1198,35 @@ function render(){
   renderSirce();
 }
 
-function horasDe(empleadoId){
-  return STATE.participaciones
-    .filter(p => String(p.EmpleadoID) === String(empleadoId))
-    .reduce((s,p)=> s + (Number(p.DuracionHoras)||0), 0);
-}
-function cursosDe(empleadoId){
-  return STATE.participaciones.filter(p => String(p.EmpleadoID) === String(empleadoId));
-}
-function participantesDe(cursoId){
-  return STATE.participaciones.filter(p => String(p.CursoID) === String(cursoId));
-}
 // "001234" y 1234 son el mismo empleado (Sheets puede haber quitado los ceros); igual que idKey_ en Code.gs
 function idKey(v){
   return String(v ?? '').trim().replace(/^0+(?=\d)/, '');
 }
+
+// Índices por ID, armados una vez por cada carga de datos (STATE nuevo). Antes cada búsqueda
+// recorría todas las participaciones: con 1,000 empleados y 10,000 participaciones eran
+// ~10 millones de comparaciones por cada tecla en "Buscar empleado".
+let INDICES = null;
+function indices(){
+  if(INDICES && INDICES.state === STATE) return INDICES;
+  const agregar = (mapa, k, v) => { const lista = mapa.get(k); lista ? lista.push(v) : mapa.set(k, [v]); };
+  const porEmpleado = new Map(), porCurso = new Map(), empleados = new Map(), cursos = new Map();
+  STATE.participaciones.forEach(p => { agregar(porEmpleado, idKey(p.EmpleadoID), p); agregar(porCurso, String(p.CursoID), p); });
+  STATE.empleados.forEach(e => { if(!empleados.has(idKey(e.ID))) empleados.set(idKey(e.ID), e); });   // igual que find(): gana el primero
+  STATE.cursos.forEach(c => { if(!cursos.has(String(c.ID))) cursos.set(String(c.ID), c); });
+  return INDICES = { state: STATE, porEmpleado, porCurso, empleados, cursos };
+}
+function cursosDe(empleadoId){
+  return indices().porEmpleado.get(idKey(empleadoId)) || [];
+}
+function participantesDe(cursoId){
+  return indices().porCurso.get(String(cursoId)) || [];
+}
 function empleadoPorId(id){
-  return STATE.empleados.find(e => idKey(e.ID) === idKey(id));
+  return indices().empleados.get(idKey(id));
+}
+function cursoPorId(id){
+  return indices().cursos.get(String(id));
 }
 
 function estadoVencimiento(curso){
@@ -1352,14 +1356,17 @@ function renderResumen(){
   const totalHoras = STATE.participaciones.reduce((s,p)=> s + (Number(p.DuracionHoras)||0), 0);
   document.getElementById('kpiHoras').textContent = totalHoras.toFixed(1).replace(/\.0$/,'');
 
-  const porVencer = STATE.cursos.filter(c => c.TieneVencimiento === 'SI' && daysUntil(c.FechaVencimiento) !== null && daysUntil(c.FechaVencimiento) <= 30 && daysUntil(c.FechaVencimiento) >= 0);
+  const porVencer = STATE.cursos
+    .filter(c => c.TieneVencimiento === 'SI')
+    .map(c => ({ c, dias: daysUntil(c.FechaVencimiento) }))
+    .filter(({dias}) => dias !== null && dias >= 0 && dias <= 30);
   document.getElementById('kpiPorVencer').textContent = porVencer.length;
 
   const banner = document.getElementById('alertBanner');
   const list = document.getElementById('alertList');
   if(porVencer.length){
     banner.classList.remove('hidden');
-    list.innerHTML = porVencer.map(c => `<li><b>${escapeHtml(c.Nombre)}</b> — vence el ${fmtDate(c.FechaVencimiento)} (${daysUntil(c.FechaVencimiento)} días)</li>`).join('');
+    list.innerHTML = porVencer.map(({c, dias}) => `<li><b>${escapeHtml(c.Nombre)}</b> — vence el ${fmtDate(c.FechaVencimiento)} (${dias} días)</li>`).join('');
   } else {
     banner.classList.add('hidden');
   }
@@ -1633,7 +1640,7 @@ function getParticipacionesSirceFiltradas(){
 
 function construirFilaSirce(p){
   const emp = empleadoPorId(p.EmpleadoID) || {};
-  const curso = STATE.cursos.find(c => String(c.ID) === String(p.CursoID)) || {};
+  const curso = cursoPorId(p.CursoID) || {};
   const claveEstablecimiento = (STATE.config && STATE.config.ClaveEstablecimiento) || '';
 
   const problemas = [];
@@ -1973,6 +1980,7 @@ fileInput.addEventListener('change', (e)=>{
         return;
       }
 
+      // Algunos catálogos traen entidades HTML sin decodificar ("CASTA&#209;OS" en vez de "CASTAÑOS")
       const get = (row, i) => {
         if(i < 0 || row[i] === undefined) return '';
         const txt = String(row[i]).trim();
@@ -2138,7 +2146,6 @@ function abrirEditarEmpleado(id){
   if(!emp){ toast('No se encontró ese empleado', true); return; }
   empleadoEditando = emp;
 
-  document.getElementById('editEmpId').value = emp.ID;
   document.getElementById('editEmpIdDisplay').value = emp.ID;
   document.getElementById('editEmpNombre').value = emp.Nombre || '';
   document.getElementById('editEmpPuesto').value = emp.Puesto || '';
@@ -2224,7 +2231,6 @@ document.getElementById('btnAgregarEmpleadoManual').addEventListener('click', ()
   document.getElementById('regEmpEstado').value = '';
   document.getElementById('regEmpTipoEscuela').value = '';
   document.getElementById('regEmpOcupacionClave').value = '';
-  document.getElementById('regEmpOcupacionRevisar').value = '';
   
   // Limpiar mensaje
   const msgEl = document.getElementById('regEmpMsg');
