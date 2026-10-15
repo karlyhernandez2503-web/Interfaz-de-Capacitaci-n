@@ -279,7 +279,7 @@
     </div>
 
     <h2>⚠️ Nuevos ingresos: Seguimiento 30 días</h2>
-    <p class="section-sub">Empleados ±5 días alrededor de cumplir su primer mes (antes o después). Se requiere completar "Entrenamiento en el trabajo" y "Evaluación de adaptación".</p>
+    <p class="section-sub">Empleados ±5 días alrededor de cumplir su primer mes (antes o después). Se requiere completar "Entrenamiento en el trabajo" y "Evaluación de adaptación": cada uno se marca hecho al registrar un curso con ese nombre en el que participe el empleado.</p>
     <div class="table-wrap">
       <table>
         <thead><tr>
@@ -398,20 +398,7 @@
           <div class="emp-picker" id="noAprobaronLista"></div>
         </div>
 
-        <details style="margin-top:16px">
-          <summary style="cursor:pointer;color:var(--p5);font-weight:600;font-size:13.5px">+ Agregar nuevo empleado al catálogo</summary>
-          <div style="margin-top:10px">
-            <label>N° de empleado (código)</label>
-            <input type="text" id="nEmpId" placeholder="Ej. 10007 — opcional, se autogenera si se deja vacío">
-            <label>Nombre</label>
-            <input type="text" id="nEmpNombre" placeholder="Nombre completo">
-            <div class="row">
-              <div><label>Puesto</label><input type="text" id="nEmpPuesto"></div>
-              <div><label>Departamento</label><input type="text" id="nEmpDepto"></div>
-            </div>
-            <button class="btn btn-ghost btn-sm" style="margin-top:12px" id="btnAddEmpleado">Agregar empleado</button>
-          </div>
-        </details>
+        <button class="btn btn-ghost btn-sm" style="margin-top:16px" id="btnAltaDesdeCurso">➕ Agregar empleado al catálogo</button>
       </div>
     </div>
   </section>
@@ -1395,11 +1382,21 @@ function renderResumen(){
   }).join('');
 }
 
+// Formatos del primer mes: cuentan como hechos si el empleado tiene registrado un curso
+// cuyo nombre trae esas palabras (sin importar mayúsculas ni acentos).
+const FORMATOS_NUEVO_INGRESO = [
+  { label: 'Entrenamiento en el trabajo', palabras: ['ENTRENAMIENTO', 'TRABAJO'] },
+  { label: 'Evaluación de adaptación', palabras: ['EVALUACION', 'ADAPTACION'] }
+];
+function formatosPendientes(empleadoId){
+  const tomados = cursosDe(empleadoId).map(p => normTxt(p.CursoNombre));
+  return FORMATOS_NUEVO_INGRESO.filter(f => !tomados.some(n => f.palabras.every(w => n.includes(w))));
+}
+
 // FUNCIÓN: Calcular alertas de nuevos ingresos
 function calcularAlertasNuevosIngresos(){
   const tbody = document.getElementById('tblNuevosIngresos');
-  const hoy = new Date();
-  
+
   // Ventana de alerta: desde 5 días antes hasta 5 días después de cumplir 30 días
   const nuevoIngresos = STATE.empleados.filter(e => {
     if(!e.FechaAlta || String(e.Estatus).toUpperCase() !== 'ALTA') return false;
@@ -1419,15 +1416,17 @@ function calcularAlertasNuevosIngresos(){
                   : diasRestantes === 0 ? 'Cumple hoy'
                   : `Cumplió hace ${Math.abs(diasRestantes)} día${diasRestantes!==-1?'s':''}`;
 
+    const pendientes = formatosPendientes(e.ID);
+    const formatos = pendientes.length
+      ? pendientes.map(f => `<span class="badge badge-danger" style="margin:0 4px 4px 0">${f.label}</span>`).join('')
+      : '<span class="badge badge-ok">✓ Completos</span>';
+
     return `<tr>
       <td><b>${escapeHtml(e.Nombre)}</b></td>
       <td>${escapeHtml(e.Puesto||'—')}</td>
       <td>${escapeHtml(e.Departamento||'—')}</td>
-      <td><span class="badge ${badgeClass}">${txtDias}</span></td>
-      <td>
-        <span class="badge badge-danger">Entrenamiento en el trabajo</span>
-        <span class="badge badge-danger" style="margin-left:4px;">Evaluación de adaptación</span>
-      </td>
+      <td><span class="badge ${pendientes.length ? badgeClass : 'badge-ok'}">${txtDias}</span></td>
+      <td>${formatos}</td>
       <td>
         <button class="btn btn-ghost btn-sm" onclick="abrirEditarEmpleado(${jsArg(e.ID)})">Editar</button>
       </td>
@@ -1813,33 +1812,8 @@ function jsArg(v){
 }
 
 // ---------- acciones ----------
-document.getElementById('btnAddEmpleado').addEventListener('click', async ()=>{
-  const nombre = document.getElementById('nEmpNombre').value.trim();
-  const idManual = document.getElementById('nEmpId').value.trim();
-  if(!nombre){ toast('Escribe el nombre del empleado', true); return; }
-  if(idManual && empleadoPorId(idManual)){
-    toast('Ya existe un empleado con ese número. Usa otro o déjalo vacío para autogenerar.', true);
-    return;
-  }
-  // Sin número manual, cada clic crea un empleado nuevo con ID autogenerado: se bloquea el doble clic
-  const btn = document.getElementById('btnAddEmpleado');
-  btn.disabled = true;
-  try{
-    await apiPost({action:'addEmpleado', empleado:{
-      ID: idManual || undefined,
-      Nombre: nombre,
-      Puesto: document.getElementById('nEmpPuesto').value.trim(),
-      Departamento: document.getElementById('nEmpDepto').value.trim()
-    }});
-    document.getElementById('nEmpId').value='';
-    document.getElementById('nEmpNombre').value='';
-    document.getElementById('nEmpPuesto').value='';
-    document.getElementById('nEmpDepto').value='';
-    toast('Empleado agregado');
-    await cargarDatos();
-  }catch(err){ toast('Error al agregar empleado: ' + err.message, true); }
-  finally{ btn.disabled = false; }
-});
+// Un solo formulario de alta (el completo): el rápido no guardaba fecha de alta ni claves SIRCE
+document.getElementById('btnAltaDesdeCurso').addEventListener('click', ()=> document.getElementById('btnAgregarEmpleadoManual').click());
 
 document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
   const nombre = document.getElementById('cNombre').value.trim();
