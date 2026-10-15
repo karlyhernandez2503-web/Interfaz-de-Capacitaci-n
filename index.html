@@ -107,7 +107,7 @@
   @media (max-width:920px){.grid-2{grid-template-columns:1fr;}}
 
   label{display:block;font-size:13px;font-weight:600;color:var(--ink);margin:14px 0 6px;}
-  input[type=text],input[type=number],input[type=date],select,textarea{
+  input[type=text],input[type=password],input[type=number],input[type=date],select,textarea{
     width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:9px;
     font-size:14px;background:#fdfbfe;color:var(--ink);
   }
@@ -226,6 +226,8 @@
     </div>
     <label>URL de Apps Script (API_URL)</label>
     <input type="text" id="inputApiUrl" placeholder="https://script.google.com/macros/s/XXXXXXXX/exec">
+    <label>Clave de acceso (API_TOKEN)</label>
+    <input type="password" id="inputApiToken" placeholder="La da la función configurarToken() en Apps Script" autocomplete="off">
 
     <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--line)">
       <h2 style="margin:0 0 4px;font-size:16px">📄 Datos para el reporte SIRCE (STPS)</h2>
@@ -773,6 +775,7 @@
    este archivo para conectarlo.
    ========================================================= */
 const API_URL_STORAGE_KEY = 'capacitacion_api_url';
+const API_TOKEN_STORAGE_KEY = 'capacitacion_api_token';
 
 let STATE = { empleados: [], cursos: [], participaciones: [], config: {} };
 let seleccionEmpleados = new Set();
@@ -1020,7 +1023,8 @@ function jsonpRequest(url, params){
     }
     window[cbName] = (data)=>{ cleanup(); resolve(data); };
     script.onerror = ()=>{ cleanup(); reject(new Error('No se pudo conectar con Google Sheets')); };
-    timeoutId = setTimeout(()=>{ cleanup(); reject(new Error('Tiempo de espera agotado')); }, 20000);
+    // 40 s: el servidor puede esperar hasta 30 s a que termine otro guardado (candado)
+    timeoutId = setTimeout(()=>{ cleanup(); reject(new Error('Tiempo de espera agotado')); }, 40000);
     const qs = new URLSearchParams(Object.assign({}, params, {callback: cbName})).toString();
     script.src = withQuery(url, qs);
     document.body.appendChild(script);
@@ -1084,36 +1088,52 @@ function updateStatusIndicator(online){
 }
 
 // ---------- API ----------
+const getApiToken = () => localStorage.getItem(API_TOKEN_STORAGE_KEY) || '';
+
 async function apiGet(){
   const url = localStorage.getItem(API_URL_STORAGE_KEY) || '';
   if(!url) throw new Error('Falta configurar la URL de Apps Script');
-  return jsonpRequest(url, {action:'getAll'});
+  const data = await jsonpRequest(url, {action:'getAll', token: getApiToken()});
+  if(!data || data.error) throw new Error((data && data.error) || 'Respuesta vacía del servidor');
+  return data;
 }
 async function apiPost(payload){
   const url = localStorage.getItem(API_URL_STORAGE_KEY) || '';
   if(!url) throw new Error('Falta configurar la URL de Apps Script');
-  await iframePost(payload);
-  // El formulario oculto no permite leer la respuesta del servidor (por diseño,
-  // así se evita el bloqueo de CORS), así que asumimos éxito y refrescamos datos.
+  const body = Object.assign({}, payload, {token: getApiToken()});
+  const json = JSON.stringify(body);
+  // Envíos chicos (curso, empleado, borrar, config) van por JSONP para leer el resultado real del servidor.
+  // El límite deja margen al tamaño máximo de URL que acepta Google.
+  if(encodeURIComponent(json).length < 6000){
+    const res = await jsonpRequest(url, {action:'post', payload: json});
+    if(!res || !res.success) throw new Error((res && res.error) || 'El servidor no confirmó el guardado');
+    return res;
+  }
+  // shortcut: la carga masiva va por formulario oculto y su respuesta no se puede leer;
+  // se confirma recargando los datos. Si algún día falla en silencio, partir en lotes más chicos.
+  await iframePost(body);
   return { success: true };
 }
 
+// Devuelve true si cargó; si falla, avisa y devuelve false (nunca lanza error)
 async function cargarDatos(){
   const url = localStorage.getItem(API_URL_STORAGE_KEY) || '';
   if(!url){
     updateStatusIndicator(false);
     document.getElementById('statusText').textContent = 'Falta configurar la conexión';
-    return;
+    return false;
   }
   try{
     const data = await apiGet();
     STATE = data;
     updateStatusIndicator(true);
     render();
+    return true;
   }catch(err){
     console.error(err);
     updateStatusIndicator(false);
-    toast('No se pudo conectar con Google Sheets. Revisa la URL en Configuración', true);
+    toast('No se pudo cargar de Google Sheets: ' + err.message, true);
+    return false;
   }
 }
 
@@ -1121,6 +1141,7 @@ async function cargarDatos(){
 const configOverlay = document.getElementById('configOverlay');
 function abrirConfig(){
   document.getElementById('inputApiUrl').value = localStorage.getItem(API_URL_STORAGE_KEY) || '';
+  document.getElementById('inputApiToken').value = getApiToken();
   document.getElementById('inputClaveEstablecimiento').value = (STATE.config && STATE.config.ClaveEstablecimiento) || '';
   document.getElementById('configMsg').textContent = '';
   document.getElementById('establecimientoMsg').textContent = '';
@@ -1159,19 +1180,19 @@ document.getElementById('btnGuardarApiUrl').addEventListener('click', async ()=>
     msg.style.color='var(--warn)';
     msg.textContent = 'Esta URL no tiene el formato típico (https://script.google.com/macros/s/XXXX/exec). Verifica que sea la correcta antes de continuar. Se guardará de todas formas.';
   }
+  const token = document.getElementById('inputApiToken').value.trim();
+  if(!token){ msg.style.color='var(--danger)'; msg.textContent='Pega la clave de acceso (la da configurarToken() en Apps Script).'; return; }
   localStorage.setItem(API_URL_STORAGE_KEY, val);
+  localStorage.setItem(API_TOKEN_STORAGE_KEY, token);
   msg.style.color = 'var(--p5)';
   msg.textContent = 'Conectando…';
-  try{
-    await cargarDatos();
-    if(localStorage.getItem(API_URL_STORAGE_KEY)){
-      msg.style.color = 'var(--ok)';
-      msg.textContent = '✔ Conectado correctamente.';
-      setTimeout(()=> configOverlay.classList.add('hidden'), 900);
-    }
-  }catch(err){
+  if(await cargarDatos()){
+    msg.style.color = 'var(--ok)';
+    msg.textContent = '✔ Conectado correctamente.';
+    setTimeout(()=> configOverlay.classList.add('hidden'), 900);
+  } else {
     msg.style.color = 'var(--danger)';
-    msg.textContent = 'No se pudo conectar: ' + err.message;
+    msg.textContent = 'No se pudo conectar: revisa la URL y la clave de acceso (el detalle salió en el aviso rojo).';
   }
 });
 
@@ -1211,9 +1232,8 @@ function estadoVencimiento(curso){
 
 // ---------- filtros (mes / curso / planta) ----------
 function mesKey(dateStr){
-  if(!dateStr) return null;
-  const d = new Date(dateStr);
-  if(isNaN(d)) return null;
+  const d = parseFechaLocal(dateStr); // new Date('2026-08-01') en México da 31 de julio
+  if(!d) return null;
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
 }
 function mesLabel(key){
@@ -1496,10 +1516,13 @@ function renderEmpleadosTabla(){
 document.getElementById('empBuscarTabla').addEventListener('input', renderEmpleadosTabla);
 
 // ---------- exportar a Excel ----------
-function nombreArchivoFecha(base){
+// Hoy en formato yyyy-MM-dd según el reloj local (toISOString usa UTC: después de las 6 pm da mañana)
+function hoyISO(){
   const d = new Date();
-  const f = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-  return `${base}_${f}.xlsx`;
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function nombreArchivoFecha(base){
+  return `${base}_${hoyISO()}.xlsx`;
 }
 
 document.getElementById('btnExportCursos').addEventListener('click', ()=>{
@@ -1569,9 +1592,8 @@ const CONSTANCIAS_HEADERS = [
 const NORMAS_HEADERS = ['CURP','CLAVE COMPETENCIA','FECHA EMISION CERTIFICADO','CLAVE ESTABLECIMIENTO'];
 
 function fmtFechaSirce(s){
-  if(!s) return '';
-  const d = new Date(s);
-  if(isNaN(d)) return '';
+  const d = parseFechaLocal(s); // fecha local: con new Date() salía un día antes en el reporte
+  if(!d) return '';
   return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
 }
 
@@ -2161,7 +2183,7 @@ document.getElementById('btnAgregarEmpleadoManual').addEventListener('click', ()
   document.getElementById('regEmpPuesto').value = '';
   document.getElementById('regEmpDepartamento').value = '';
   document.getElementById('regEmpEstatus').value = 'ALTA';
-  document.getElementById('regEmpFechaAlta').value = new Date().toISOString().split('T')[0];
+  document.getElementById('regEmpFechaAlta').value = hoyISO();
   document.getElementById('regEmpCurp').value = '';
   document.getElementById('regEmpEscolaridad').value = '';
   document.getElementById('regEmpDocEscolaridad').value = '';
