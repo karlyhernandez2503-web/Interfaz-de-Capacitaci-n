@@ -123,6 +123,7 @@
     cursor:pointer;transition:transform .05s ease;
   }
   .btn:active{transform:scale(.97);}
+  .btn:disabled{opacity:.55;cursor:wait;}
   .btn-primary{background:linear-gradient(120deg,var(--p4),var(--p3));color:#fff;}
   .btn-ghost{background:#f3e9fb;color:var(--p5);}
   .btn-danger{background:#fdeaec;color:var(--danger);}
@@ -1584,6 +1585,8 @@ function getFiltrosSirce(){
 function getParticipacionesSirceFiltradas(){
   const f = getFiltrosSirce();
   return STATE.participaciones.filter(p => {
+    // La constancia DC-3 acredita haber llevado Y aprobado el curso (LFT art. 153-V): sin reprobados
+    if(p.Aprobado === 'NO') return false;
     if(f.mes && mesKey(p.FechaImparticion) !== f.mes) return false;
     if(f.curso && p.CursoNombre !== f.curso) return false;
     return true;
@@ -1774,6 +1777,9 @@ document.getElementById('btnAddEmpleado').addEventListener('click', async ()=>{
     toast('Ya existe un empleado con ese número. Usa otro o déjalo vacío para autogenerar.', true);
     return;
   }
+  // Sin número manual, cada clic crea un empleado nuevo con ID autogenerado: se bloquea el doble clic
+  const btn = document.getElementById('btnAddEmpleado');
+  btn.disabled = true;
   try{
     await apiPost({action:'addEmpleado', empleado:{
       ID: idManual || undefined,
@@ -1788,6 +1794,7 @@ document.getElementById('btnAddEmpleado').addEventListener('click', async ()=>{
     toast('Empleado agregado');
     await cargarDatos();
   }catch(err){ toast('Error al agregar empleado: ' + err.message, true); }
+  finally{ btn.disabled = false; }
 });
 
 document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
@@ -1802,6 +1809,9 @@ document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
   if(!duracion || Number(duracion) <= 0) return toast('Captura la duración en horas', true);
   if(tieneVenc && !fechaVenc) return toast('Captura la fecha de vencimiento', true);
 
+  // Bloqueado mientras guarda: un doble clic registraba el curso dos veces y duplicaba horas
+  const btn = document.getElementById('btnGuardarCurso');
+  btn.disabled = true;
   try{
     await apiPost({
       action:'addCurso',
@@ -1820,7 +1830,9 @@ document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
         FechaEmisionCertificado: document.getElementById('cFechaEmisionCert').value
       },
       empleadoIds: Array.from(seleccionEmpleados),
-      noAprobadosIds: Array.from(seleccionNoAprobaron)
+      // Si al final quedó "Sí", se ignora lo que se haya palomeado antes en "No"
+      noAprobadosIds: document.querySelector('input[name="aprobaronTodos"]:checked').value === 'no'
+        ? Array.from(seleccionNoAprobaron) : []
     });
     toast('Curso guardado y horas acumuladas');
     document.getElementById('cNombre').value='';
@@ -1842,6 +1854,7 @@ document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
     seleccionNoAprobaron.clear();
     await cargarDatos();
   }catch(err){ toast('Error al guardar curso: ' + err.message, true); }
+  finally{ btn.disabled = false; }
 });
 
 async function eliminarCurso(id){
