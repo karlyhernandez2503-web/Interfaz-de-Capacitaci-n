@@ -256,6 +256,11 @@
 
 <main>
 
+  <div id="avisoCatalogos" class="alert-banner hidden" style="margin-top:14px">
+    <div>⚠️</div>
+    <div><b>No se cargaron los catálogos SIRCE</b><span id="avisoCatalogosTexto"></span></div>
+  </div>
+
   <!-- RESUMEN -->
   <section id="view-dashboard" class="view active">
     <div id="alertBanner" class="alert-banner hidden">
@@ -675,7 +680,7 @@
     </div>
     <div class="table-wrap" style="max-height:280px;margin-top:14px">
       <table>
-        <thead><tr><th>Código</th><th>Nombre</th><th>Depto</th><th>Puesto</th><th>Estatus</th><th>CURP</th><th>Escolaridad</th><th>Ciudad</th><th>Estado</th></tr></thead>
+        <thead><tr><th>Código</th><th>Nombre</th><th>Depto</th><th>Puesto</th><th>Estatus</th><th>CURP</th><th>Escolaridad</th><th>Ciudad</th><th>Estado</th><th>Fecha alta</th></tr></thead>
         <tbody id="uploadPreviewBody"></tbody>
       </table>
     </div>
@@ -788,6 +793,9 @@ const SC = window.SIRCE_CATALOGOS || {
   estados:[], municipios:[], ocupaciones:[], normas:[], areasTematicas:[],
   docProbatorio:[], tiposAgente:[], modalidades:[], instituciones:[], escolaridad:[], objetivos:[]
 };
+// Sin catálogos, calcularClavesSirce daría claves vacías y se guardarían encima de las buenas
+const CATALOGOS_OK = SC.estados.length > 0 && SC.ocupaciones.length > 0;
+const MSG_SIN_CATALOGOS = 'No se cargó sirce-catalogos.js (debe estar junto a index.html). Sin él las claves SIRCE se guardarían vacías: cargar, registrar y editar empleados queda bloqueado.';
 
 // Algunos catálogos traen entidades HTML sin decodificar en el texto
 // (ej. "CASTA&#209;OS" en vez de "CASTAÑOS") — se corrige al leer el archivo.
@@ -904,6 +912,7 @@ const mapOcupacionClave = (() => {
 
 // Calcula todas las claves SIRCE derivadas de un empleado a partir de sus datos de catálogo
 function calcularClavesSirce(emp){
+  if(!CATALOGOS_OK) throw new Error(MSG_SIN_CATALOGOS);
   const estadoClave = matchCatalogo(SC.estados, emp.Estado);
   const estadoDesc = estadoClave ? (SC.estados.find(e => e[0] === estadoClave) || [])[1] : '';
   const municipioClave = matchMunicipio(emp.Ciudad, estadoDesc || emp.Estado);
@@ -1221,8 +1230,12 @@ function cursosDe(empleadoId){
 function participantesDe(cursoId){
   return STATE.participaciones.filter(p => String(p.CursoID) === String(cursoId));
 }
+// "001234" y 1234 son el mismo empleado (Sheets puede haber quitado los ceros); igual que idKey_ en Code.gs
+function idKey(v){
+  return String(v ?? '').trim().replace(/^0+(?=\d)/, '');
+}
 function empleadoPorId(id){
-  return STATE.empleados.find(e => String(e.ID) === String(id));
+  return STATE.empleados.find(e => idKey(e.ID) === idKey(id));
 }
 
 function estadoVencimiento(curso){
@@ -1804,7 +1817,7 @@ document.getElementById('btnAddEmpleado').addEventListener('click', async ()=>{
   const nombre = document.getElementById('nEmpNombre').value.trim();
   const idManual = document.getElementById('nEmpId').value.trim();
   if(!nombre){ toast('Escribe el nombre del empleado', true); return; }
-  if(idManual && STATE.empleados.some(e => String(e.ID) === idManual)){
+  if(idManual && empleadoPorId(idManual)){
     toast('Ya existe un empleado con ese número. Usa otro o déjalo vacío para autogenerar.', true);
     return;
   }
@@ -1906,8 +1919,8 @@ const fileInput = document.getElementById('fileCatalogo');
 document.getElementById('btnAbrirCatalogo').addEventListener('click', ()=> fileInput.click());
 
 document.getElementById('btnDescargarPlantilla').addEventListener('click', ()=>{
-  const headers = ['CODIGO','NOMBRE_COMPLETO','NOMBRE','APELLIDOPATERNO','APELLIDOMATERNO','DEPARTAMENTO','PUESTO','CURP','ESTATUS','ESCOLARIDAD','CIUDAD','ESTADO','TIPO_ESCUELA','DOC_ESCOLARIDAD'];
-  const ejemplo = ['10007','JUAN PEREZ GARCIA','JUAN','PEREZ','GARCIA','PLANTA 1','OPERADOR DE MAQUINA','PEGJ800101HCLRRN01','ALTA','PREPARATORIA','MONCLOVA','COAHUILA','PUBLICA','CERTIFICADO'];
+  const headers = ['CODIGO','NOMBRE_COMPLETO','NOMBRE','APELLIDOPATERNO','APELLIDOMATERNO','DEPARTAMENTO','PUESTO','CURP','ESTATUS','ESCOLARIDAD','CIUDAD','ESTADO','TIPO_ESCUELA','DOC_ESCOLARIDAD','FECHA_ALTA'];
+  const ejemplo = ['10007','JUAN PEREZ GARCIA','JUAN','PEREZ','GARCIA','PLANTA 1','OPERADOR DE MAQUINA','PEGJ800101HCLRRN01','ALTA','PREPARATORIA','MONCLOVA','COAHUILA','PUBLICA','CERTIFICADO','01/08/2026'];
   const ws = XLSX.utils.aoa_to_sheet([headers, ejemplo]);
   ws['!cols'] = headers.map(()=>({wch:18}));
   const wb = XLSX.utils.book_new();
@@ -1922,6 +1935,7 @@ document.getElementById('btnDescargarPlantilla').addEventListener('click', ()=>{
     ['DOC_ESCOLARIDAD','TITULO, CERTIFICADO, DIPLOMA, CEDULA, OTRO'],
     ['ESCOLARIDAD','Texto libre, ej. PRIMARIA, SECUNDARIA, PREPARATORIA, PROFESIONAL, MAESTRIA, DOCTORADO'],
     ['CIUDAD / ESTADO','Nombre del municipio / estado — se usa para calcular las claves del reporte SIRCE.'],
+    ['FECHA_ALTA','Fecha de ingreso (dd/mm/aaaa o fecha de Excel). Sirve para el seguimiento de 30 días. Vacía = se conserva la que ya tenía.'],
     ['','Borra la fila de ejemplo antes de subir tu archivo real.']
   ];
   const wsAyuda = XLSX.utils.aoa_to_sheet(ayuda);
@@ -1930,6 +1944,23 @@ document.getElementById('btnDescargarPlantilla').addEventListener('click', ()=>{
 
   XLSX.writeFile(wb, 'Plantilla_Empleados.xlsx');
 });
+
+// Fecha de una celda de Excel a 'yyyy-MM-dd'. Excel entrega las fechas como número de serie;
+// el texto se acepta como dd/mm/aaaa o aaaa-mm-dd. Lo que no se reconoce queda vacío
+// (el servidor conserva entonces la fecha que ya tenía).
+function fechaDeCelda(v){
+  const dos = n => String(n).padStart(2,'0');
+  if(typeof v === 'number'){
+    const p = XLSX.SSF.parse_date_code(v);
+    return p ? `${p.y}-${dos(p.m)}-${dos(p.d)}` : '';
+  }
+  const s = String(v ?? '').trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if(m) return `${m[1]}-${dos(m[2])}-${dos(m[3])}`;
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m) return `${m[3]}-${dos(m[2])}-${dos(m[1])}`;
+  return '';
+}
 
 fileInput.addEventListener('change', (e)=>{
   const file = e.target.files[0];
@@ -1960,6 +1991,8 @@ fileInput.addEventListener('change', (e)=>{
       const iEstado = iEscolaridad >= 0 ? iEscolaridad + 2 : -1;
       const iTipoEscuela = iEscolaridad >= 0 ? iEscolaridad + 3 : -1;
       const iDocEscolaridad = iEscolaridad >= 0 ? iEscolaridad + 4 : -1;
+      const iFechaAlta = ['FECHA_ALTA','FECHA ALTA','FECHA DE ALTA','FECHA_INGRESO','FECHA INGRESO','FECHA DE INGRESO']
+        .map(idx).find(i => i >= 0) ?? -1;
 
       if(iCodigo < 0 || iNombreCompleto < 0){
         toast('El archivo no tiene las columnas CODIGO y NOMBRE_COMPLETO', true);
@@ -1987,7 +2020,8 @@ fileInput.addEventListener('change', (e)=>{
           Ciudad: get(row, iCiudad),
           Estado: get(row, iEstado),
           TipoEscuela: get(row, iTipoEscuela),
-          DocEscolaridad: get(row, iDocEscolaridad)
+          DocEscolaridad: get(row, iDocEscolaridad),
+          FechaAlta: iFechaAlta >= 0 ? fechaDeCelda(row[iFechaAlta]) : ''
         };
         Object.assign(emp, calcularClavesSirce(emp));
         return emp;
@@ -2021,8 +2055,8 @@ function getModoCarga(){
 function getListaCargaFinal(){
   const lista = filtrarPorEstatus();
   if(getModoCarga() === 'soloNuevos'){
-    const idsExistentes = new Set(STATE.empleados.map(e => String(e.ID)));
-    return lista.filter(e => !idsExistentes.has(String(e.ID)));
+    const idsExistentes = new Set(STATE.empleados.map(e => idKey(e.ID)));
+    return lista.filter(e => !idsExistentes.has(idKey(e.ID)));
   }
   return lista;
 }
@@ -2039,8 +2073,8 @@ function renderPreviewTabla(){
   const total = catalogoParaCargar.length;
   const altas = catalogoParaCargar.filter(e => e.Estatus === 'ALTA').length;
 
-  const idsExistentes = new Set(STATE.empleados.map(e => String(e.ID)));
-  const duplicados = lista.filter(e => idsExistentes.has(String(e.ID)));
+  const idsExistentes = new Set(STATE.empleados.map(e => idKey(e.ID)));
+  const duplicados = lista.filter(e => idsExistentes.has(idKey(e.ID)));
   const wrap = document.getElementById('duplicadosWrap');
   if(duplicados.length){
     wrap.style.display = 'block';
@@ -2052,7 +2086,8 @@ function renderPreviewTabla(){
 
   const listaFinal = getListaCargaFinal();
   document.getElementById('uploadSummary').innerHTML =
-    `Archivo leído: <b>${total}</b> filas · <b>${altas}</b> con estatus ALTA. Se cargarán <b>${listaFinal.length}</b> empleados.`;
+    `Archivo leído: <b>${total}</b> filas · <b>${altas}</b> con estatus ALTA. Se cargarán <b>${listaFinal.length}</b> empleados` +
+    ` (<b>${listaFinal.filter(e => e.FechaAlta).length}</b> con fecha de alta).`;
   const body = document.getElementById('uploadPreviewBody');
   const muestra = listaFinal.slice(0, 50);
   body.innerHTML = muestra.map(e => `<tr>
@@ -2060,10 +2095,10 @@ function renderPreviewTabla(){
     <td>${escapeHtml(e.Departamento)}</td><td>${escapeHtml(e.Puesto)}</td>
     <td><span class="badge ${e.Estatus==='ALTA'?'badge-ok':'badge-neutral'}">${escapeHtml(e.Estatus)}</span></td>
     <td>${escapeHtml(e.CURP)}</td><td>${escapeHtml(e.Escolaridad)}</td>
-    <td>${escapeHtml(e.Ciudad)}</td><td>${escapeHtml(e.Estado)}</td>
-  </tr>`).join('') || '<tr><td colspan="9" class="empty-state">Sin filas con el filtro actual</td></tr>';
+    <td>${escapeHtml(e.Ciudad)}</td><td>${escapeHtml(e.Estado)}</td><td>${fmtDate(e.FechaAlta)}</td>
+  </tr>`).join('') || '<tr><td colspan="10" class="empty-state">Sin filas con el filtro actual</td></tr>';
   if(listaFinal.length > 50){
-    body.innerHTML += `<tr><td colspan="9" class="muted" style="text-align:center">…y ${listaFinal.length - 50} más</td></tr>`;
+    body.innerHTML += `<tr><td colspan="10" class="muted" style="text-align:center">…y ${listaFinal.length - 50} más</td></tr>`;
   }
 }
 document.getElementById('soloAlta').addEventListener('change', renderPreviewTabla);
@@ -2176,6 +2211,7 @@ document.getElementById('btnGuardarEdicionEmpleado').addEventListener('click', a
   };
   // se parte del registro completo (incluye nombre desglosado oculto y demás
   // campos que no aparecen en este formulario) para no perder nada al guardar
+  if(!CATALOGOS_OK){ msg.style.color='var(--danger)'; msg.textContent = MSG_SIN_CATALOGOS; return; }
   const merged = Object.assign({}, empleadoEditando, camposEditados);
   Object.assign(merged, calcularClavesSirce(merged));
 
@@ -2243,7 +2279,9 @@ document.getElementById('btnGuardarEmpleado').addEventListener('click', async ()
     msg.textContent = texto;
     msg.style.display = 'block';
   };
-  
+
+  if(!CATALOGOS_OK){ mostrarError('⚠️ ' + MSG_SIN_CATALOGOS); return; }
+
   // Validaciones
   if(!id){
     mostrarError('⚠️ El ID de empleado es requerido.');
@@ -2337,7 +2375,11 @@ function autoprueba(){
     [mapCatalogoAClave('escolaridad','Preparatoria'), '4'],
     [fmtFechaSirce('2026-08-20'), '20/08/2026'],
     [mesKey('2026-08-01'), '2026-08'],
-    [jsArg(`x');alert(1);//`), '&quot;x&#39;);alert(1);//&quot;']
+    [jsArg(`x');alert(1);//`), '&quot;x&#39;);alert(1);//&quot;'],
+    [idKey('001234'), idKey(1234)],
+    [fechaDeCelda(46235), '2026-08-01'],
+    [fechaDeCelda('1/8/2026'), '2026-08-01'],
+    [fechaDeCelda('no es fecha'), '']
   ];
   const fallas = casos.filter(([obtenido, esperado]) => obtenido !== esperado);
   console[fallas.length ? 'error' : 'log']('Autoprueba: ' + (casos.length - fallas.length) + '/' + casos.length + ' OK', fallas);
@@ -2346,6 +2388,10 @@ function autoprueba(){
 
 // ---------- init ----------
 inicializarCatalogosFormulario();
+if(!CATALOGOS_OK){
+  document.getElementById('avisoCatalogosTexto').textContent = MSG_SIN_CATALOGOS;
+  document.getElementById('avisoCatalogos').classList.remove('hidden');
+}
 if(location.search.includes('autotest=1')) autoprueba();
 cargarDatos();
 </script>
