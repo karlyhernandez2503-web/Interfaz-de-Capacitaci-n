@@ -822,7 +822,7 @@ const MAPAS_CATALOGO = {
     'NINGUNO':'1','NINGUNA':'1','SIN ESTUDIOS':'1',
     'PRIMARIA':'2',
     'SECUNDARIA':'3',
-    'PREPARATORIA':'4','BACHILLERATO':'4','MEDIA SUPERIOR':'4','TECNICO':'4',
+    'PREPARATORIA':'4','BACHILLERATO':'4','MEDIA SUPERIOR':'4','TECNICO':'4','PROFESIONAL TECNICO':'4', // CONALEP
     'CARRERA TECNICA':'5','TECNICA':'5','TECNICO SUPERIOR':'5',
     'PROFESIONAL':'6','LICENCIATURA':'6','INGENIERIA':'6','UNIVERSIDAD':'6',
     'ESPECIALIDAD':'7',
@@ -843,7 +843,10 @@ function mapCatalogoAClave(tipo, texto){
   if(tipo === 'escolaridad'){
     const mapa = MAPAS_CATALOGO.escolaridad;
     if(mapa[t]) return mapa[t];
-    const key = Object.keys(mapa).find(k => t.includes(k));
+    // Gana la palabra que aparece primero ("MAESTRIA EN INGENIERIA" = maestría) y, empatadas, la más
+    // larga ("TECNICO SUPERIOR UNIVERSITARIO" = técnico superior, no "TECNICO" = bachillerato)
+    const key = Object.keys(mapa).filter(k => t.includes(k))
+      .sort((a,b) => t.indexOf(a) - t.indexOf(b) || b.length - a.length)[0];
     return key ? mapa[key] : '';
   }
   
@@ -978,7 +981,8 @@ const daysUntil = (dateStr) => {
 const fmtDate = (s) => {
   if(!s) return '—';
   const d = parseFechaLocal(s);
-  return !d ? s : d.toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'});
+  // fmtDate siempre va a HTML: si no es fecha, el texto crudo se escapa
+  return !d ? escapeHtml(s) : d.toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'});
 };
 // Días que faltan (+) o ya pasaron (-) para que el empleado cumpla 30 días desde su FechaAlta
 const diasParaUnMes = (emp) => {
@@ -1371,7 +1375,7 @@ function renderResumen(){
     return `<tr>
       <td>${escapeHtml(c.Nombre)}</td>
       <td>${fmtDate(c.FechaImparticion)}</td>
-      <td>${c.DuracionHoras}</td>
+      <td>${escapeHtml(c.DuracionHoras)}</td>
       <td><span class="badge ${est.cls}">${est.label}</span></td>
       <td>${participantesDe(c.ID).length}</td>
     </tr>`;
@@ -1412,7 +1416,7 @@ function calcularAlertasNuevosIngresos(){
         <span class="badge badge-danger" style="margin-left:4px;">Evaluación de adaptación</span>
       </td>
       <td>
-        <button class="btn btn-ghost btn-sm" onclick="abrirEditarEmpleado('${e.ID}')">Editar</button>
+        <button class="btn btn-ghost btn-sm" onclick="abrirEditarEmpleado(${jsArg(e.ID)})">Editar</button>
       </td>
     </tr>`;
   }).join('');
@@ -1439,18 +1443,18 @@ function renderCursos(){
     const noAprobaron = parts.filter(p => p.Aprobado === 'NO').length;
     const filaPrincipal = `<tr>
       <td>
-        <button class="btn btn-ghost btn-sm" style="padding:3px 9px;margin-right:6px" onclick="toggleCursoDetalle('${c.ID}')">${expandido ? '▾' : '▸'}</button>
+        <button class="btn btn-ghost btn-sm" style="padding:3px 9px;margin-right:6px" onclick="toggleCursoDetalle(${jsArg(c.ID)})">${expandido ? '▾' : '▸'}</button>
         ${escapeHtml(c.Nombre)}
       </td>
       <td>${fmtDate(c.FechaImparticion)}</td>
-      <td>${c.DuracionHoras} hrs</td>
+      <td>${escapeHtml(c.DuracionHoras)} hrs</td>
       <td>${c.TieneVencimiento === 'SI' ? fmtDate(c.FechaVencimiento) : '—'}</td>
       <td><span class="badge ${est.cls}">${est.label}</span></td>
       <td title="${escapeHtml(nombres)}">
         ${parts.length} participante(s)
         ${noAprobaron ? `<span class="badge badge-danger" style="margin-left:6px">${noAprobaron} no aprobó</span>` : ''}
       </td>
-      <td><button class="btn btn-danger btn-sm" onclick="eliminarCurso('${c.ID}')">Eliminar</button></td>
+      <td><button class="btn btn-danger btn-sm" onclick="eliminarCurso(${jsArg(c.ID)})">Eliminar</button></td>
     </tr>`;
 
     if(!expandido) return filaPrincipal;
@@ -1503,12 +1507,12 @@ function renderEmpleadosTabla(){
       <td>${escapeHtml(e.Escolaridad||'—')}</td>
       <td>${escapeHtml(e.Ciudad||'—')}</td>
       <td>${escapeHtml(e.Estado||'—')}</td>
-      <td>${escapeHtml(e.FechaAlta ? fmtDate(e.FechaAlta) : '—')}</td>
+      <td>${e.FechaAlta ? fmtDate(e.FechaAlta) : '—'}</td>
       <td title="${escapeHtml(nombresCursos)}">${parts.length}</td>
       <td><b>${horas.toFixed(1).replace(/\.0$/,'')}</b> hrs</td>
       <td>
-        <button class="btn btn-ghost btn-sm" onclick="abrirEditarEmpleado('${e.ID}')">Editar</button>
-        <button class="btn btn-danger btn-sm" onclick="eliminarEmpleado('${e.ID}')">Eliminar</button>
+        <button class="btn btn-ghost btn-sm" onclick="abrirEditarEmpleado(${jsArg(e.ID)})">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarEmpleado(${jsArg(e.ID)})">Eliminar</button>
       </td>
     </tr>`;
   }).join('');
@@ -1744,7 +1748,7 @@ function renderPicker(){
   if(!lista.length){ cont.innerHTML = '<div class="muted" style="padding:8px">No hay empleados en el catálogo todavía.</div>'; return; }
   cont.innerHTML = lista.map(e => `
     <div class="emp-opt">
-      <input type="checkbox" data-id="${e.ID}" ${seleccionEmpleados.has(String(e.ID)) ? 'checked':''} onchange="toggleEmp('${e.ID}', this.checked)">
+      <input type="checkbox" data-id="${escapeHtml(e.ID)}" ${seleccionEmpleados.has(String(e.ID)) ? 'checked':''} onchange="toggleEmp(${jsArg(e.ID)}, this.checked)">
       <label style="margin:0;font-weight:400"><span class="muted">#${escapeHtml(e.ID)}</span> — ${escapeHtml(e.Nombre)} <span class="muted">${e.Puesto ? '· '+escapeHtml(e.Puesto):''}</span></label>
     </div>`).join('');
   document.getElementById('empSeleccionados').textContent = seleccionEmpleados.size;
@@ -1769,7 +1773,7 @@ function renderNoAprobaronLista(){
     const e = empleadoPorId(id);
     const nombre = e ? e.Nombre : ('Empleado ' + id);
     return `<div class="emp-opt">
-      <input type="checkbox" ${seleccionNoAprobaron.has(id) ? 'checked':''} onchange="toggleNoAprobo('${id}', this.checked)">
+      <input type="checkbox" ${seleccionNoAprobaron.has(id) ? 'checked':''} onchange="toggleNoAprobo(${jsArg(id)}, this.checked)">
       <label style="margin:0;font-weight:400">${escapeHtml(nombre)}</label>
     </div>`;
   }).join('');
@@ -1788,6 +1792,11 @@ document.querySelectorAll('input[name="aprobaronTodos"]').forEach(radio => {
 
 function escapeHtml(s){
   return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+// Valor para onclick="f(...)": JSON lo vuelve un texto JS válido y escapeHtml lo protege dentro del atributo.
+// Con '${id}' un código como  x');eliminarCurso('5  ejecutaba lo que trajera la hoja o el Excel.
+function jsArg(v){
+  return escapeHtml(JSON.stringify(String(v ?? '')));
 }
 
 // ---------- acciones ----------
@@ -2101,6 +2110,20 @@ document.getElementById('btnConfirmarCarga').addEventListener('click', async ()=
 const editEmpleadoOverlay = document.getElementById('editEmpleadoOverlay');
 let empleadoEditando = null;
 
+// Un <select> que recibe un valor que no tiene ("Certificado", "Pública") queda vacío, y al guardar
+// se borraba el dato. Se busca la opción sin importar mayúsculas/acentos; si no existe, se agrega tal cual.
+function seleccionarOpcion(id, valor){
+  const sel = document.getElementById(id);
+  sel.querySelectorAll('option[data-extra]').forEach(o => o.remove());
+  const v = String(valor ?? '').trim();
+  const opcion = [...sel.options].find(o => normTxt(o.value) === normTxt(v));
+  if(opcion){ sel.value = opcion.value; return; }
+  const extra = new Option(v, v);
+  extra.dataset.extra = '1';
+  sel.add(extra);
+  sel.value = v;
+}
+
 function abrirEditarEmpleado(id){
   const emp = empleadoPorId(id);
   if(!emp){ toast('No se encontró ese empleado', true); return; }
@@ -2111,14 +2134,14 @@ function abrirEditarEmpleado(id){
   document.getElementById('editEmpNombre').value = emp.Nombre || '';
   document.getElementById('editEmpPuesto').value = emp.Puesto || '';
   document.getElementById('editEmpDepto').value = emp.Departamento || '';
-  document.getElementById('editEmpEstatus').value = emp.Estatus || 'ALTA';
+  seleccionarOpcion('editEmpEstatus', emp.Estatus || 'ALTA');
   document.getElementById('editEmpFechaAlta').value = emp.FechaAlta || '';
   document.getElementById('editEmpCurp').value = emp.CURP || '';
   document.getElementById('editEmpEscolaridad').value = emp.Escolaridad || '';
-  document.getElementById('editEmpDoc').value = emp.DocEscolaridad || '';
+  seleccionarOpcion('editEmpDoc', emp.DocEscolaridad);
   document.getElementById('editEmpCiudad').value = emp.Ciudad || '';
   document.getElementById('editEmpEstado').value = emp.Estado || '';
-  document.getElementById('editEmpTipoEscuela').value = emp.TipoEscuela || '';
+  seleccionarOpcion('editEmpTipoEscuela', emp.TipoEscuela);
 
   const ocDesc = emp.OcupacionClave ? (SC.ocupaciones.find(o => o[0] === String(emp.OcupacionClave)) || [])[1] : '';
   document.getElementById('editEmpOcupacion').value = emp.OcupacionClave ? (emp.OcupacionClave + ' - ' + (ocDesc || '')) : '';
@@ -2272,10 +2295,11 @@ document.getElementById('btnGuardarEmpleado').addEventListener('click', async ()
   // Si hay ocupación manual, procesarla
   const ocupacionManual = document.getElementById('regEmpOcupacionClave').value.trim();
   if(ocupacionManual){
-    const clave = mapOcupacionClave(ocupacionManual);
-    if(clave){
-      nuevoEmpleado.OcupacionClave = clave;
-      nuevoEmpleado.OcupacionRevisar = false;
+    // mapOcupacionClave devuelve {clave, revisar}, no un texto: antes se guardaba el objeto entero
+    const oc = mapOcupacionClave(ocupacionManual);
+    if(oc.clave){
+      nuevoEmpleado.OcupacionClave = oc.clave;
+      nuevoEmpleado.OcupacionRevisar = oc.revisar;
     }
   }
   
@@ -2303,8 +2327,26 @@ document.getElementById('btnGuardarEmpleado').addEventListener('click', async ()
   }
 });
 
+// ---------- autoprueba: abrir con ?autotest=1 y revisar la consola ----------
+function autoprueba(){
+  const casos = [
+    [mapCatalogoAClave('escolaridad','Técnico Superior Universitario'), '5'],
+    [mapCatalogoAClave('escolaridad','Maestría en Ingeniería'), '8'],
+    [mapCatalogoAClave('escolaridad','Secundaria técnica'), '3'],
+    [mapCatalogoAClave('escolaridad','Profesional Técnico Bachiller'), '4'],
+    [mapCatalogoAClave('escolaridad','Preparatoria'), '4'],
+    [fmtFechaSirce('2026-08-20'), '20/08/2026'],
+    [mesKey('2026-08-01'), '2026-08'],
+    [jsArg(`x');alert(1);//`), '&quot;x&#39;);alert(1);//&quot;']
+  ];
+  const fallas = casos.filter(([obtenido, esperado]) => obtenido !== esperado);
+  console[fallas.length ? 'error' : 'log']('Autoprueba: ' + (casos.length - fallas.length) + '/' + casos.length + ' OK', fallas);
+  return fallas.length === 0;
+}
+
 // ---------- init ----------
 inicializarCatalogosFormulario();
+if(location.search.includes('autotest=1')) autoprueba();
 cargarDatos();
 </script>
 </body>
