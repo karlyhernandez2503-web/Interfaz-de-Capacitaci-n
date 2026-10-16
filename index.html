@@ -329,7 +329,17 @@
           <input type="date" id="cFechaVenc">
         </div>
 
-        <details style="margin-top:18px">
+        <div class="checkbox-line" style="margin-top:18px;gap:16px">
+          <span style="font-weight:600;font-size:13px">¿Aplica SIRCE?</span>
+          <label style="margin:0;font-weight:400;display:flex;align-items:center;gap:5px">
+            <input type="radio" name="aplicaSirce" value="SI" checked> Sí
+          </label>
+          <label style="margin:0;font-weight:400;display:flex;align-items:center;gap:5px">
+            <input type="radio" name="aplicaSirce" value="NO"> No
+          </label>
+        </div>
+
+        <details id="cSirceDetalles" style="margin-top:12px">
           <summary style="cursor:pointer;color:var(--p5);font-weight:600;font-size:13.5px">📄 Datos para el reporte SIRCE (STPS) — opcional</summary>
           <div style="margin-top:10px">
             <label>Área temática</label>
@@ -383,6 +393,20 @@
           <div id="empListaPicker"></div>
         </div>
         <div class="emp-count"><span id="empSeleccionados">0</span> empleado(s) seleccionado(s)</div>
+
+        <div class="checkbox-line" style="margin-top:16px;gap:16px">
+          <span style="font-weight:600;font-size:13px">¿Hubo inasistencia?</span>
+          <label style="margin:0;font-weight:400;display:flex;align-items:center;gap:5px">
+            <input type="radio" name="huboInasistencia" value="si"> Sí
+          </label>
+          <label style="margin:0;font-weight:400;display:flex;align-items:center;gap:5px">
+            <input type="radio" name="huboInasistencia" value="no" checked> No
+          </label>
+        </div>
+        <div id="faltaronWrap" style="display:none;margin-top:10px">
+          <label>Selecciona quién faltó</label>
+          <div class="emp-picker" id="faltaronLista"></div>
+        </div>
 
         <div class="checkbox-line" style="margin-top:16px;gap:16px">
           <span style="font-weight:600;font-size:13px">¿Aprobaron todos los participantes?</span>
@@ -594,7 +618,8 @@
       partir de los cursos y empleados capturados. Las claves de catálogo (estado, municipio,
       ocupación, escolaridad, documento probatorio, institución) se calculan automáticamente al
       subir el catálogo de empleados; las del curso (área temática, modalidad, agente, objetivo) se
-      capturan al registrar cada curso.
+      capturan al registrar cada curso. Solo entran los cursos con "¿Aplica SIRCE? Sí" y los
+      participantes que asistieron y aprobaron.
     </p>
 
     <div id="sirceAvisoConfig" class="alert-banner hidden">
@@ -1206,12 +1231,19 @@ function idKey(v){
 // Índices por ID, armados una vez por cada carga de datos (STATE nuevo). Antes cada búsqueda
 // recorría todas las participaciones: con 1,000 empleados y 10,000 participaciones eran
 // ~10 millones de comparaciones por cada tecla en "Buscar empleado".
+// Registros anteriores a estas columnas vienen vacíos: cuentan como "asistió" y "aplica SIRCE"
+const asistio = p => p.Asistio !== 'NO';
+const aplicaSirce = c => !c || c.AplicaSIRCE !== 'NO';
+
 let INDICES = null;
 function indices(){
   if(INDICES && INDICES.state === STATE) return INDICES;
   const agregar = (mapa, k, v) => { const lista = mapa.get(k); lista ? lista.push(v) : mapa.set(k, [v]); };
   const porEmpleado = new Map(), porCurso = new Map(), empleados = new Map(), cursos = new Map();
-  STATE.participaciones.forEach(p => { agregar(porEmpleado, idKey(p.EmpleadoID), p); agregar(porCurso, String(p.CursoID), p); });
+  STATE.participaciones.forEach(p => {
+    if(asistio(p)) agregar(porEmpleado, idKey(p.EmpleadoID), p);   // cursosDe = cursos tomados (sin faltas)
+    agregar(porCurso, String(p.CursoID), p);                       // participantesDe = todos, incluidas faltas
+  });
   STATE.empleados.forEach(e => { if(!empleados.has(idKey(e.ID))) empleados.set(idKey(e.ID), e); });   // igual que find(): gana el primero
   STATE.cursos.forEach(c => { if(!cursos.has(String(c.ID))) cursos.set(String(c.ID), c); });
   return INDICES = { state: STATE, porEmpleado, porCurso, empleados, cursos };
@@ -1279,7 +1311,8 @@ function poblarFiltros(){
   poblarSelect(document.getElementById('filtroEmpPlanta'), plantas);
 
   poblarSelect(document.getElementById('filtroSirceMes'), meses, mesLabel);
-  poblarSelect(document.getElementById('filtroSirceCurso'), nombresCursos);
+  poblarSelect(document.getElementById('filtroSirceCurso'),
+    Array.from(new Set(STATE.cursos.filter(aplicaSirce).map(c => c.Nombre).filter(Boolean))).sort());
 }
 
 function getFiltrosCursos(){
@@ -1384,7 +1417,7 @@ function renderResumen(){
       <td>${fmtDate(c.FechaImparticion)}</td>
       <td>${escapeHtml(c.DuracionHoras)}</td>
       <td><span class="badge ${est.cls}">${est.label}</span></td>
-      <td>${participantesDe(c.ID).length}</td>
+      <td>${participantesDe(c.ID).filter(asistio).length}</td>
     </tr>`;
   }).join('');
 }
@@ -1457,21 +1490,25 @@ function renderCursos(){
   tbody.innerHTML = ordenados.map(c=>{
     const est = estadoVencimiento(c);
     const parts = participantesDe(c.ID);
-    const nombres = parts.map(p=>p.EmpleadoNombre).join(', ') || '—';
+    const asistentes = parts.filter(asistio);
+    const faltaron = parts.length - asistentes.length;
+    const nombres = asistentes.map(p=>p.EmpleadoNombre).join(', ') || '—';
     const expandido = cursosExpandidos.has(String(c.ID));
-    const noAprobaron = parts.filter(p => p.Aprobado === 'NO').length;
+    const noAprobaron = asistentes.filter(p => p.Aprobado === 'NO').length;
     const filaPrincipal = `<tr>
       <td>
         <button class="btn btn-ghost btn-sm" style="padding:3px 9px;margin-right:6px" onclick="toggleCursoDetalle(${jsArg(c.ID)})">${expandido ? '▾' : '▸'}</button>
         ${escapeHtml(c.Nombre)}
+        ${c.AplicaSIRCE === 'NO' ? '<span class="badge badge-neutral" style="margin-left:6px">Sin SIRCE</span>' : ''}
       </td>
       <td>${fmtDate(c.FechaImparticion)}</td>
       <td>${escapeHtml(c.DuracionHoras)} hrs</td>
       <td>${c.TieneVencimiento === 'SI' ? fmtDate(c.FechaVencimiento) : '—'}</td>
       <td><span class="badge ${est.cls}">${est.label}</span></td>
       <td title="${escapeHtml(nombres)}">
-        ${parts.length} participante(s)
+        ${asistentes.length} participante(s)
         ${noAprobaron ? `<span class="badge badge-danger" style="margin-left:6px">${noAprobaron} no aprobó</span>` : ''}
+        ${faltaron ? `<span class="badge badge-warn" style="margin-left:6px">${faltaron} faltó</span>` : ''}
       </td>
       <td><button class="btn btn-danger btn-sm" onclick="eliminarCurso(${jsArg(c.ID)})">Eliminar</button></td>
     </tr>`;
@@ -1484,7 +1521,8 @@ function renderCursos(){
           <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:#fff;border:1px solid var(--line);border-radius:8px">
             <span class="badge badge-neutral" style="flex:0 0 auto">Ficha ${escapeHtml(p.EmpleadoID)}</span>
             <span style="flex:1">${escapeHtml(p.EmpleadoNombre)}</span>
-            <span class="badge ${p.Aprobado === 'NO' ? 'badge-danger' : 'badge-ok'}" style="flex:0 0 auto">${p.Aprobado === 'NO' ? '✗ No aprobó' : '✓ Aprobó'}</span>
+            ${!asistio(p) ? '<span class="badge badge-warn" style="flex:0 0 auto">Faltó</span>'
+              : `<span class="badge ${p.Aprobado === 'NO' ? 'badge-danger' : 'badge-ok'}" style="flex:0 0 auto">${p.Aprobado === 'NO' ? '✗ No aprobó' : '✓ Aprobó'}</span>`}
           </div>`).join('') +
         `</div>`
       : '<span class="muted">Sin participantes registrados</span>';
@@ -1554,6 +1592,7 @@ document.getElementById('btnExportCursos').addEventListener('click', ()=>{
   const filas = cursos.map(c=>{
     const est = estadoVencimiento(c);
     const parts = participantesDe(c.ID);
+    const asistentes = parts.filter(asistio);
     return {
       'Curso': c.Nombre,
       'Fecha de impartición': c.FechaImparticion,
@@ -1561,12 +1600,14 @@ document.getElementById('btnExportCursos').addEventListener('click', ()=>{
       'Tiene vencimiento': c.TieneVencimiento === 'SI' ? 'Sí' : 'No',
       'Fecha de vencimiento': c.TieneVencimiento === 'SI' ? c.FechaVencimiento : '',
       'Estado': est.label,
-      'N° de participantes': parts.length,
-      'Participantes': parts.map(p=>p.EmpleadoNombre).join(', ')
+      'Aplica SIRCE': c.AplicaSIRCE === 'NO' ? 'No' : 'Sí',
+      'N° de participantes': asistentes.length,
+      'Participantes': asistentes.map(p=>p.EmpleadoNombre).join(', '),
+      'Faltaron': parts.filter(p => !asistio(p)).map(p=>p.EmpleadoNombre).join(', ')
     };
   });
   const ws = XLSX.utils.json_to_sheet(filas);
-  ws['!cols'] = [{wch:28},{wch:14},{wch:12},{wch:14},{wch:16},{wch:16},{wch:14},{wch:50}];
+  ws['!cols'] = [{wch:28},{wch:14},{wch:12},{wch:14},{wch:16},{wch:16},{wch:12},{wch:14},{wch:50},{wch:40}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Cursos');
   XLSX.writeFile(wb, nombreArchivoFecha('Cursos_capacitacion'));
@@ -1630,8 +1671,9 @@ function getFiltrosSirce(){
 function getParticipacionesSirceFiltradas(){
   const f = getFiltrosSirce();
   return STATE.participaciones.filter(p => {
-    // La constancia DC-3 acredita haber llevado Y aprobado el curso (LFT art. 153-V): sin reprobados
-    if(p.Aprobado === 'NO') return false;
+    // La constancia DC-3 acredita haber llevado Y aprobado el curso (LFT art. 153-V): sin reprobados ni faltas
+    if(p.Aprobado === 'NO' || !asistio(p)) return false;
+    if(!aplicaSirce(cursoPorId(p.CursoID))) return false;   // cursos marcados "¿Aplica SIRCE? No"
     if(f.mes && mesKey(p.FechaImparticion) !== f.mes) return false;
     if(f.curso && p.CursoNombre !== f.curso) return false;
     return true;
@@ -1775,37 +1817,72 @@ function renderPicker(){
 document.getElementById('empBuscar').addEventListener('input', renderPicker);
 
 let seleccionNoAprobaron = new Set();
+let seleccionFaltaron = new Set();
+
+const radioMarcado = (name) => document.querySelector(`input[name="${name}"]:checked`).value;
+const huboInasistencia = () => radioMarcado('huboInasistencia') === 'si';
+// Quienes faltaron (solo si la respuesta final es "Sí" y siguen seleccionados como participantes)
+const faltaronActuales = () => huboInasistencia() ? Array.from(seleccionFaltaron).filter(id => seleccionEmpleados.has(id)) : [];
 
 function toggleEmp(id, checked){
-  if(checked) seleccionEmpleados.add(String(id));
-  else { seleccionEmpleados.delete(String(id)); seleccionNoAprobaron.delete(String(id)); }
+  id = String(id);
+  if(checked) seleccionEmpleados.add(id);
+  else { seleccionEmpleados.delete(id); seleccionNoAprobaron.delete(id); seleccionFaltaron.delete(id); }
   document.getElementById('empSeleccionados').textContent = seleccionEmpleados.size;
+  renderFaltaronLista();
   renderNoAprobaronLista();
 }
 
-function renderNoAprobaronLista(){
-  const cont = document.getElementById('noAprobaronLista');
-  if(!cont) return;
-  const ids = Array.from(seleccionEmpleados);
-  if(!ids.length){ cont.innerHTML = '<div class="muted" style="padding:8px">Primero selecciona a los participantes arriba.</div>'; return; }
+// Lista de casillas con los participantes seleccionados (para "quién faltó" y "quién no aprobó")
+function renderListaParticipantes(contId, ids, marcados, fnToggle, vacio){
+  const cont = document.getElementById(contId);
+  if(!ids.length){ cont.innerHTML = `<div class="muted" style="padding:8px">${vacio}</div>`; return; }
   cont.innerHTML = ids.map(id => {
     const e = empleadoPorId(id);
     const nombre = e ? e.Nombre : ('Empleado ' + id);
     return `<div class="emp-opt">
-      <input type="checkbox" ${seleccionNoAprobaron.has(id) ? 'checked':''} onchange="toggleNoAprobo(${jsArg(id)}, this.checked)">
+      <input type="checkbox" ${marcados.has(id) ? 'checked':''} onchange="${fnToggle}(${jsArg(id)}, this.checked)">
       <label style="margin:0;font-weight:400">${escapeHtml(nombre)}</label>
     </div>`;
   }).join('');
+}
+function renderFaltaronLista(){
+  renderListaParticipantes('faltaronLista', Array.from(seleccionEmpleados), seleccionFaltaron, 'toggleFalto',
+    'Primero selecciona a los participantes arriba.');
+}
+function renderNoAprobaronLista(){
+  // quien faltó no puede aprobar ni reprobar: no aparece aquí
+  const faltaron = new Set(faltaronActuales());
+  renderListaParticipantes('noAprobaronLista', Array.from(seleccionEmpleados).filter(id => !faltaron.has(id)), seleccionNoAprobaron,
+    'toggleNoAprobo', seleccionEmpleados.size ? 'Todos los seleccionados faltaron.' : 'Primero selecciona a los participantes arriba.');
+}
+function toggleFalto(id, checked){
+  if(checked){ seleccionFaltaron.add(String(id)); seleccionNoAprobaron.delete(String(id)); }
+  else seleccionFaltaron.delete(String(id));
+  renderNoAprobaronLista();
 }
 function toggleNoAprobo(id, checked){
   if(checked) seleccionNoAprobaron.add(String(id));
   else seleccionNoAprobaron.delete(String(id));
 }
+document.querySelectorAll('input[name="huboInasistencia"]').forEach(radio => {
+  radio.addEventListener('change', ()=>{
+    document.getElementById('faltaronWrap').style.display = huboInasistencia() ? 'block' : 'none';
+    renderFaltaronLista();
+    renderNoAprobaronLista();
+  });
+});
 document.querySelectorAll('input[name="aprobaronTodos"]').forEach(radio => {
   radio.addEventListener('change', ()=>{
-    const esNo = document.querySelector('input[name="aprobaronTodos"]:checked').value === 'no';
+    const esNo = radioMarcado('aprobaronTodos') === 'no';
     document.getElementById('noAprobaronWrap').style.display = esNo ? 'block' : 'none';
     if(esNo) renderNoAprobaronLista();
+  });
+});
+// "¿Aplica SIRCE? No": se ocultan los datos SIRCE del curso (no se van a usar)
+document.querySelectorAll('input[name="aplicaSirce"]').forEach(radio => {
+  radio.addEventListener('change', ()=>{
+    document.getElementById('cSirceDetalles').style.display = radioMarcado('aplicaSirce') === 'NO' ? 'none' : '';
   });
 });
 
@@ -1833,6 +1910,8 @@ document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
   if(!fecha) return toast('Selecciona la fecha en que se impartió', true);
   if(!duracion || Number(duracion) <= 0) return toast('Captura la duración en horas', true);
   if(tieneVenc && !fechaVenc) return toast('Captura la fecha de vencimiento', true);
+  const faltaronIds = faltaronActuales();
+  if(huboInasistencia() && !faltaronIds.length) return toast('Marca quién faltó o cambia "¿Hubo inasistencia?" a No', true);
 
   // Bloqueado mientras guarda: un doble clic registraba el curso dos veces y duplicaba horas
   const btn = document.getElementById('btnGuardarCurso');
@@ -1852,12 +1931,14 @@ document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
         RFCAgente: document.getElementById('cRfcAgente').value.trim().toUpperCase(),
         ObjetivoClave: document.getElementById('cObjetivo').value,
         ClaveCompetencia: claveDeDatalistInput('cClaveCompetencia'),
-        FechaEmisionCertificado: document.getElementById('cFechaEmisionCert').value
+        FechaEmisionCertificado: document.getElementById('cFechaEmisionCert').value,
+        AplicaSIRCE: radioMarcado('aplicaSirce')
       },
       empleadoIds: Array.from(seleccionEmpleados),
-      // Si al final quedó "Sí", se ignora lo que se haya palomeado antes en "No"
-      noAprobadosIds: document.querySelector('input[name="aprobaronTodos"]:checked').value === 'no'
-        ? Array.from(seleccionNoAprobaron) : []
+      faltaronIds,
+      // Si al final quedó "Sí", se ignora lo que se haya palomeado antes en "No"; quien faltó nunca cuenta como reprobado
+      noAprobadosIds: radioMarcado('aprobaronTodos') === 'no'
+        ? Array.from(seleccionNoAprobaron).filter(id => seleccionEmpleados.has(id) && !faltaronIds.includes(id)) : []
     });
     toast('Curso guardado y horas acumuladas');
     document.getElementById('cNombre').value='';
@@ -1875,8 +1956,13 @@ document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
     document.getElementById('cFechaEmisionCert').value='';
     document.querySelector('input[name="aprobaronTodos"][value="si"]').checked = true;
     document.getElementById('noAprobaronWrap').style.display = 'none';
+    document.querySelector('input[name="huboInasistencia"][value="no"]').checked = true;
+    document.getElementById('faltaronWrap').style.display = 'none';
+    document.querySelector('input[name="aplicaSirce"][value="SI"]').checked = true;
+    document.getElementById('cSirceDetalles').style.display = '';
     seleccionEmpleados.clear();
     seleccionNoAprobaron.clear();
+    seleccionFaltaron.clear();
     await cargarDatos();
   }catch(err){ toast('Error al guardar curso: ' + err.message, true); }
   finally{ btn.disabled = false; }
