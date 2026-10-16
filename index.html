@@ -194,6 +194,28 @@
   .filter-bar label{margin:0 0 6px;font-size:12px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.04em;}
   .filter-bar select, .filter-bar input{margin:0;}
   .filter-actions{display:flex;gap:8px;flex:0 0 auto;min-width:auto;}
+
+  /* Constancias DC-3: solo existen al imprimir (la clase se pone en <body> justo antes de window.print) */
+  #areaImpresion{display:none;}
+  @media print{
+    @page{size:letter;margin:12mm;}
+    body.imprimiendo-dc3{background:#fff;}
+    body.imprimiendo-dc3 > :not(#areaImpresion){display:none !important;}
+    body.imprimiendo-dc3 #areaImpresion{display:block;}
+  }
+  .dc3{font-family:Arial,Helvetica,sans-serif;font-size:9.5pt;color:#000;page-break-after:always;break-after:page;}
+  .dc3:last-child{page-break-after:auto;break-after:auto;}
+  .dc3 .dc3-titulo{text-align:center;font-weight:700;margin-bottom:6px;}
+  .dc3 .dc3-titulo small{display:block;font-weight:400;font-size:8pt;}
+  .dc3 table{width:100%;border-collapse:collapse;font-size:9.5pt;margin-bottom:8px;}
+  .dc3 th{background:#000;color:#fff;text-align:center;padding:4px;font-weight:700;position:static;border-radius:0;}
+  .dc3 td{border:1px solid #000;padding:4px 6px;vertical-align:top;}
+  .dc3 .dc3-et{display:block;font-size:7.5pt;}
+  .dc3 .dc3-val{display:block;font-weight:700;min-height:14px;text-transform:uppercase;}
+  .dc3 .caja{display:inline-block;width:15px;height:17px;border:1px solid #000;margin-right:-1px;text-align:center;font-weight:700;line-height:17px;}
+  .dc3 .dc3-firmas{display:flex;gap:16px;margin-top:40px;text-align:center;font-size:8.5pt;}
+  .dc3 .dc3-firmas div{flex:1;border-top:1px solid #000;padding-top:4px;}
+  .dc3 .dc3-protesta{font-size:8pt;text-align:center;margin-top:10px;}
 </style>
 </head>
 <body>
@@ -228,6 +250,8 @@
     <input type="text" id="inputApiUrl" placeholder="https://script.google.com/macros/s/XXXXXXXX/exec">
     <label>Clave de acceso (API_TOKEN)</label>
     <input type="password" id="inputApiToken" placeholder="La da la función configurarToken() en Apps Script" autocomplete="off">
+    <label>Tu nombre (para el historial de cambios)</label>
+    <input type="text" id="inputUsuario" placeholder="Ej. Herson R." maxlength="60">
 
     <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--line)">
       <h2 style="margin:0 0 4px;font-size:16px">📄 Datos para el reporte SIRCE (STPS)</h2>
@@ -236,6 +260,21 @@
       <input type="text" id="inputClaveEstablecimiento" placeholder="Ej. 160569">
       <button class="btn btn-ghost btn-sm" id="btnGuardarEstablecimiento" style="margin-top:10px">Guardar clave de establecimiento</button>
       <div id="establecimientoMsg" style="margin-top:8px;font-size:12.5px"></div>
+    </div>
+
+    <div style="margin-top:22px;padding-top:18px;border-top:1px solid var(--line)">
+      <h2 style="margin:0 0 4px;font-size:16px">🖨 Datos de la empresa (constancias DC-3)</h2>
+      <p class="section-sub" style="margin-top:2px">Aparecen en todas las DC-3 que se impriman.</p>
+      <label>Nombre o razón social</label>
+      <input type="text" id="inputRazonSocial">
+      <label>RFC de la empresa (con homoclave)</label>
+      <input type="text" id="inputRfcEmpresa" placeholder="Ej. MET850101AB1">
+      <div class="row">
+        <div><label>Patrón o representante legal</label><input type="text" id="inputRepLegal"></div>
+        <div><label>Representante de los trabajadores</label><input type="text" id="inputRepTrabajadores"></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="btnGuardarEmpresa" style="margin-top:10px">Guardar datos de la empresa</button>
+      <div id="empresaMsg" style="margin-top:8px;font-size:12.5px"></div>
     </div>
 
     <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
@@ -252,6 +291,8 @@
   <button class="tab-btn" data-view="listaCursos">Cursos</button>
   <button class="tab-btn" data-view="empleados">Empleados y horas</button>
   <button class="tab-btn" data-view="sirce">SIRCE (STPS)</button>
+  <button class="tab-btn" data-view="catalogos">Catálogos</button>
+  <button class="tab-btn" data-view="historial">Historial</button>
 </nav>
 
 <main>
@@ -289,6 +330,15 @@
       </table>
     </div>
 
+    <h2 style="margin-top:36px;">🔁 Reentrenamiento por empleado <span class="muted" id="reentrenamientoCuenta" style="font-size:14px"></span></h2>
+    <p class="section-sub">Empleados en ALTA cuyo curso más reciente con vencimiento ya venció o vence en 30 días o menos. Si el empleado volvió a tomar el curso, cuenta la vez más reciente.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Empleado</th><th>Puesto</th><th>Planta</th><th>Curso</th><th>Vence</th><th>Estado</th></tr></thead>
+        <tbody id="tblReentrenamiento"><tr><td colspan="6" class="empty-state">Nadie tiene reentrenamiento pendiente</td></tr></tbody>
+      </table>
+    </div>
+
     <h2 style="margin-top:36px;">Últimos cursos registrados</h2>
     <div class="table-wrap">
       <table>
@@ -300,22 +350,48 @@
 
   <!-- REGISTRAR CURSO -->
   <section id="view-cursos" class="view">
-    <h2>Registrar curso de capacitación</h2>
+    <h2 id="tituloFormCurso">Registrar curso de capacitación</h2>
     <p class="section-sub">Captura el curso, marca si tiene vencimiento y selecciona a los empleados que participaron. Al guardar, las horas se acumulan automáticamente en cada empleado.</p>
 
     <div class="grid-2">
       <div>
+        <div class="row">
+          <div>
+            <label>Curso del catálogo (opcional)</label>
+            <select id="cCatalogoCurso"><option value="">— Captura libre —</option></select>
+          </div>
+          <div>
+            <label>Agente capacitador (opcional)</label>
+            <select id="cAgente"><option value="">— Ninguno —</option></select>
+          </div>
+        </div>
+
         <label>Nombre del curso</label>
         <input type="text" id="cNombre" placeholder="Ej. Seguridad e higiene NOM-035">
 
         <div class="row">
           <div>
-            <label>Fecha en que se impartió</label>
+            <label>Fecha de inicio</label>
             <input type="date" id="cFecha">
+          </div>
+          <div>
+            <label>Fecha de término</label>
+            <input type="date" id="cFechaFin" title="Si el curso duró un solo día, déjala vacía">
           </div>
           <div>
             <label>Duración (horas)</label>
             <input type="number" id="cDuracion" min="0" step="0.5" placeholder="Ej. 8">
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Instructor</label>
+            <input type="text" id="cInstructor" placeholder="Nombre de quien impartió el curso">
+          </div>
+          <div>
+            <label>Evidencia (enlace)</label>
+            <input type="text" id="cEvidencia" placeholder="https://… lista de asistencia o fotos en Drive">
           </div>
         </div>
 
@@ -381,8 +457,9 @@
           </div>
         </details>
 
-        <div style="margin-top:22px">
+        <div style="margin-top:22px;display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-primary" id="btnGuardarCurso">Guardar curso</button>
+          <button class="btn btn-ghost" id="btnCancelarEdicionCurso" style="display:none">Cancelar edición</button>
         </div>
       </div>
 
@@ -639,6 +716,13 @@
         <label>Curso</label>
         <select id="filtroSirceCurso"><option value="">Todos los cursos</option></select>
       </div>
+      <div>
+        <label>Mostrar</label>
+        <select id="filtroSirceEstado">
+          <option value="">Todas las filas</option>
+          <option value="avisos">Solo con advertencias</option>
+        </select>
+      </div>
       <div class="filter-actions">
         <button class="btn btn-ghost btn-sm" id="btnLimpiarFiltrosSirce">Limpiar filtros</button>
         <button class="btn btn-primary btn-sm" id="btnExportSirce">📄 Descargar plantilla SIRCE (.xlsx)</button>
@@ -658,6 +742,63 @@
           <th>Clave ocupación</th><th>Estado</th>
         </tr></thead>
         <tbody id="tblSirce"><tr><td colspan="6" class="empty-state">Sin registros que mostrar</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CATÁLOGOS -->
+  <section id="view-catalogos" class="view">
+    <h2>Agentes capacitadores</h2>
+    <p class="section-sub">Instructores internos o empresas capacitadoras. Al elegirlos en "Registrar curso" se llenan solos el tipo de agente, el RFC y el instructor.</p>
+    <div class="filter-bar">
+      <div><label>Nombre</label><input type="text" id="agNombre" placeholder="Ej. Capacitadora XYZ o Juan Pérez"></div>
+      <div><label>Tipo de agente</label><select id="agTipo"><option value="">— Selecciona —</option></select></div>
+      <div><label>RFC del agente (STPS)</label><input type="text" id="agRfc" placeholder="Ej. GOHJ720614J51"></div>
+      <div><label>Instructor</label><input type="text" id="agInstructor" placeholder="Quien imparte (para la DC-3)"></div>
+      <div class="filter-actions">
+        <button class="btn btn-primary btn-sm" id="btnGuardarAgentes">Agregar</button>
+        <button class="btn btn-ghost btn-sm" id="btnCancelarAgentes" style="display:none">Cancelar</button>
+      </div>
+    </div>
+    <div class="table-wrap" style="margin-bottom:32px">
+      <table>
+        <thead><tr><th>Nombre</th><th>Tipo de agente</th><th>RFC</th><th>Instructor</th><th></th></tr></thead>
+        <tbody id="tblAgentes"></tbody>
+      </table>
+    </div>
+
+    <h2>Cursos frecuentes</h2>
+    <p class="section-sub">Al elegirlos en "Registrar curso" se llenan solos el nombre, la duración, los datos SIRCE y el agente. Con vigencia, la fecha de vencimiento se calcula desde la fecha de término.</p>
+    <div class="filter-bar">
+      <div><label>Nombre del curso</label><input type="text" id="ccNombre"></div>
+      <div><label>Duración (horas)</label><input type="number" id="ccDuracion" min="0" step="0.5"></div>
+      <div><label>Área temática</label><input type="text" id="ccArea" list="dlAreasTematicas" placeholder="Escribe para buscar…" autocomplete="off"></div>
+      <div><label>Modalidad</label><select id="ccModalidad"><option value="">— Selecciona —</option></select></div>
+      <div><label>Objetivo</label><select id="ccObjetivo"><option value="">— Selecciona —</option></select></div>
+      <div><label>Agente capacitador</label><select id="ccAgente"><option value="">— Ninguno —</option></select></div>
+      <div><label>¿Aplica SIRCE?</label><select id="ccAplica"><option value="SI">Sí</option><option value="NO">No</option></select></div>
+      <div><label>Vigencia (meses)</label><input type="number" id="ccVigencia" min="0" step="1" placeholder="0 = no vence"></div>
+      <div class="filter-actions">
+        <button class="btn btn-primary btn-sm" id="btnGuardarCatalogoCursos">Agregar</button>
+        <button class="btn btn-ghost btn-sm" id="btnCancelarCatalogoCursos" style="display:none">Cancelar</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Curso</th><th>Duración</th><th>Área temática</th><th>Agente</th><th>SIRCE</th><th>Vigencia</th><th></th></tr></thead>
+        <tbody id="tblCatalogoCursos"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- HISTORIAL -->
+  <section id="view-historial" class="view">
+    <h2>Historial de cambios</h2>
+    <p class="section-sub">Últimos 300 movimientos (altas, ediciones y borrados). El nombre es el que cada quien escribe en ⚙️ Configuración. Las copias completas de lo borrado están en la hoja "Historial" del Google Sheet.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Tipo</th><th>ID</th><th>Detalle</th></tr></thead>
+        <tbody id="tblHistorial"><tr><td colspan="6" class="empty-state">Sin movimientos registrados</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -774,6 +915,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<div id="areaImpresion"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="sirce-catalogos.js"></script>
@@ -962,6 +1104,9 @@ function inicializarCatalogosFormulario(){
   poblarCatalogo('cTipoAgente', SC.tiposAgente, 'select');
   poblarCatalogo('cObjetivo', SC.objetivos, 'select');
   poblarCatalogo('dlOcupacionesEdit', SC.ocupaciones);
+  poblarCatalogo('agTipo', SC.tiposAgente, 'select');
+  poblarCatalogo('ccModalidad', SC.modalidades, 'select');
+  poblarCatalogo('ccObjetivo', SC.objetivos, 'select');
 }
 
 // ---------- utilidades ----------
@@ -997,6 +1142,9 @@ const fmtDate = (s) => {
   // fmtDate siempre va a HTML: si no es fecha, el texto crudo se escapa
   return !d ? escapeHtml(s) : d.toLocaleDateString('es-MX', {day:'2-digit', month:'short', year:'numeric'});
 };
+// "01 oct 2026" o "01 oct 2026 – 03 oct 2026" si el curso duró varios días
+const fmtPeriodo = (c) => (c.FechaTermino && c.FechaTermino !== c.FechaImparticion)
+  ? `${fmtDate(c.FechaImparticion)} – ${fmtDate(c.FechaTermino)}` : fmtDate(c.FechaImparticion);
 // Días que faltan (+) o ya pasaron (-) para que el empleado cumpla 30 días desde su FechaAlta
 const diasParaUnMes = (emp) => {
   const alta = parseFechaLocal(emp.FechaAlta);
@@ -1106,6 +1254,9 @@ function updateStatusIndicator(online){
 
 // ---------- API ----------
 const getApiToken = () => localStorage.getItem(API_TOKEN_STORAGE_KEY) || '';
+// Nombre para el historial: solo referencia (no hay inicio de sesión por persona)
+const USUARIO_STORAGE_KEY = 'capacitacion_usuario';
+const getUsuario = () => localStorage.getItem(USUARIO_STORAGE_KEY) || '';
 
 async function apiGet(){
   const url = localStorage.getItem(API_URL_STORAGE_KEY) || '';
@@ -1117,7 +1268,7 @@ async function apiGet(){
 async function apiPost(payload){
   const url = localStorage.getItem(API_URL_STORAGE_KEY) || '';
   if(!url) throw new Error('Falta configurar la URL de Apps Script');
-  const body = Object.assign({}, payload, {token: getApiToken()});
+  const body = Object.assign({}, payload, {token: getApiToken(), usuario: getUsuario()});
   const json = JSON.stringify(body);
   // Envíos chicos (curso, empleado, borrar, config) van por JSONP para leer el resultado real del servidor.
   // El límite deja margen al tamaño máximo de URL que acepta Google.
@@ -1159,12 +1310,16 @@ const configOverlay = document.getElementById('configOverlay');
 function abrirConfig(){
   document.getElementById('inputApiUrl').value = localStorage.getItem(API_URL_STORAGE_KEY) || '';
   document.getElementById('inputApiToken').value = getApiToken();
+  document.getElementById('inputUsuario').value = getUsuario();
+  Object.entries(CAMPOS_EMPRESA).forEach(([id, clave]) => { document.getElementById(id).value = (STATE.config || {})[clave] || ''; });
+  document.getElementById('empresaMsg').textContent = '';
   document.getElementById('inputClaveEstablecimiento').value = (STATE.config && STATE.config.ClaveEstablecimiento) || '';
   document.getElementById('configMsg').textContent = '';
   document.getElementById('establecimientoMsg').textContent = '';
   configOverlay.classList.remove('hidden');
 }
 document.getElementById('btnConfig').addEventListener('click', abrirConfig);
+document.getElementById('inputUsuario').addEventListener('change', (e)=> localStorage.setItem(USUARIO_STORAGE_KEY, e.target.value.trim()));
 document.getElementById('btnCerrarConfig').addEventListener('click', ()=> configOverlay.classList.add('hidden'));
 
 document.getElementById('btnGuardarEstablecimiento').addEventListener('click', async ()=>{
@@ -1182,6 +1337,22 @@ document.getElementById('btnGuardarEstablecimiento').addEventListener('click', a
     msg.style.color = 'var(--danger)';
     msg.textContent = 'Error al guardar: ' + err.message;
   }
+});
+
+// Datos de la empresa para las DC-3 (se guardan en la hoja Config con setConfig, igual que la clave de establecimiento)
+const CAMPOS_EMPRESA = { inputRazonSocial:'RazonSocial', inputRfcEmpresa:'RFCEmpresa', inputRepLegal:'RepresentanteLegal', inputRepTrabajadores:'RepresentanteTrabajadores' };
+document.getElementById('btnGuardarEmpresa').addEventListener('click', async ()=>{
+  const msg = document.getElementById('empresaMsg');
+  const config = {};
+  Object.entries(CAMPOS_EMPRESA).forEach(([id, clave]) => { config[clave] = document.getElementById(id).value.trim(); });
+  config.RFCEmpresa = config.RFCEmpresa.toUpperCase();
+  if(config.RFCEmpresa && !rfcValido(config.RFCEmpresa)){ msg.style.color='var(--danger)'; msg.textContent='El RFC no tiene un formato válido (12 o 13 caracteres).'; return; }
+  msg.style.color = 'var(--p5)'; msg.textContent = 'Guardando…';
+  try{
+    await apiPost({action:'setConfig', config});
+    await cargarDatos();
+    msg.style.color = 'var(--ok)'; msg.textContent = '✔ Guardados.';
+  }catch(err){ msg.style.color = 'var(--danger)'; msg.textContent = 'Error al guardar: ' + err.message; }
 });
 
 document.getElementById('btnGuardarApiUrl').addEventListener('click', async ()=>{
@@ -1221,6 +1392,39 @@ function render(){
   renderCursos();
   renderEmpleadosTabla();
   renderSirce();
+  renderHistorial();
+  renderCatalogos();
+}
+
+// ---------- historial de cambios ----------
+// El detalle viene como texto o JSON: {campo: [antes, después]}, Participantes: [...], o copia de lo borrado
+function detalleHistorial(h){
+  let d;
+  try{ d = JSON.parse(h.Detalle); }catch{ return escapeHtml(h.Detalle); }
+  if(d === null || typeof d !== 'object') return escapeHtml(String(d));
+  if(h.Accion === 'Borrar'){
+    const nombre = d.curso ? (d.curso.Nombre || '') + ` · ${(d.participaciones || []).length} participante(s)` : (d.Nombre || '');
+    return `${escapeHtml(nombre)} <span class="muted">(copia completa en la hoja "Historial")</span>`;
+  }
+  const lineas = Object.entries(d).map(([campo, v]) => {
+    if(campo === 'Participantes' && Array.isArray(v)) return `<b>Participantes:</b> ${escapeHtml(v.join(' · '))}`;
+    if(Array.isArray(v) && v.length === 2) return `<b>${escapeHtml(campo)}:</b> ${escapeHtml(v[0] || '(vacío)')} → ${escapeHtml(v[1] || '(vacío)')}`;
+    return `<b>${escapeHtml(campo)}:</b> ${escapeHtml(typeof v === 'object' ? JSON.stringify(v) : v)}`;
+  });
+  return lineas.length ? lineas.join('<br>') : '<span class="muted">Sin cambios</span>';
+}
+function renderHistorial(){
+  const tbody = document.getElementById('tblHistorial');
+  const lista = (STATE.historial || []).slice().reverse();   // lo más reciente primero
+  if(!lista.length){ tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Sin movimientos registrados</td></tr>'; return; }
+  tbody.innerHTML = lista.map(h => `<tr>
+    <td style="white-space:nowrap">${escapeHtml(h.Fecha)}</td>
+    <td>${escapeHtml(h.Usuario || '—')}</td>
+    <td><span class="badge ${h.Accion === 'Borrar' ? 'badge-danger' : h.Accion === 'Editar' ? 'badge-warn' : 'badge-neutral'}">${escapeHtml(h.Accion)}</span></td>
+    <td>${escapeHtml(h.Tipo)}</td>
+    <td>${escapeHtml(h.RegistroID)}</td>
+    <td style="font-size:12.5px">${detalleHistorial(h)}</td>
+  </tr>`).join('');
 }
 
 // "001234" y 1234 son el mismo empleado (Sheets puede haber quitado los ceros); igual que idKey_ en Code.gs
@@ -1406,6 +1610,7 @@ function renderResumen(){
 
   // Render alertas de nuevos ingresos
   calcularAlertasNuevosIngresos();
+  renderReentrenamiento();
 
   const ordenados = [...STATE.cursos].sort((a,b) => new Date(b.FechaRegistro||b.FechaImparticion) - new Date(a.FechaRegistro||a.FechaImparticion)).slice(0,8);
   const tbody = document.getElementById('tblResumen');
@@ -1501,7 +1706,7 @@ function renderCursos(){
         ${escapeHtml(c.Nombre)}
         ${c.AplicaSIRCE === 'NO' ? '<span class="badge badge-neutral" style="margin-left:6px">Sin SIRCE</span>' : ''}
       </td>
-      <td>${fmtDate(c.FechaImparticion)}</td>
+      <td>${fmtPeriodo(c)}</td>
       <td>${escapeHtml(c.DuracionHoras)} hrs</td>
       <td>${c.TieneVencimiento === 'SI' ? fmtDate(c.FechaVencimiento) : '—'}</td>
       <td><span class="badge ${est.cls}">${est.label}</span></td>
@@ -1510,12 +1715,23 @@ function renderCursos(){
         ${noAprobaron ? `<span class="badge badge-danger" style="margin-left:6px">${noAprobaron} no aprobó</span>` : ''}
         ${faltaron ? `<span class="badge badge-warn" style="margin-left:6px">${faltaron} faltó</span>` : ''}
       </td>
-      <td><button class="btn btn-danger btn-sm" onclick="eliminarCurso(${jsArg(c.ID)})">Eliminar</button></td>
+      <td style="white-space:nowrap">
+        <button class="btn btn-ghost btn-sm" onclick="editarCurso(${jsArg(c.ID)})">Editar</button>
+        <button class="btn btn-danger btn-sm" onclick="eliminarCurso(${jsArg(c.ID)})">Eliminar</button>
+      </td>
     </tr>`;
 
     if(!expandido) return filaPrincipal;
 
-    const detalle = parts.length
+    const aprobados = asistentes.filter(p => p.Aprobado !== 'NO').length;
+    const datosCurso = [
+      aprobados ? `<button class="btn btn-primary btn-sm" onclick="generarDC3(${jsArg(c.ID)})">🖨 Constancias DC-3 (${aprobados})</button>` : '',
+      c.Instructor ? `<b>Instructor:</b> ${escapeHtml(c.Instructor)}` : '',
+      esEnlaceWeb(c.EvidenciaURL) ? `<a href="${escapeHtml(c.EvidenciaURL)}" target="_blank" rel="noopener noreferrer">📎 Ver evidencia</a>` : '',
+      c.FechaModificacion ? `<span class="muted">Modificado el ${fmtDate(c.FechaModificacion)}</span>` : ''
+    ].filter(Boolean).join(' · ');
+
+    const detalle = (datosCurso ? `<div style="margin-bottom:10px;font-size:13px">${datosCurso}</div>` : '') + (parts.length
       ? `<div style="display:flex;flex-direction:column;gap:8px">` +
         parts.map(p => `
           <div style="display:flex;align-items:center;gap:10px;padding:6px 10px;background:#fff;border:1px solid var(--line);border-radius:8px">
@@ -1525,7 +1741,7 @@ function renderCursos(){
               : `<span class="badge ${p.Aprobado === 'NO' ? 'badge-danger' : 'badge-ok'}" style="flex:0 0 auto">${p.Aprobado === 'NO' ? '✗ No aprobó' : '✓ Aprobó'}</span>`}
           </div>`).join('') +
         `</div>`
-      : '<span class="muted">Sin participantes registrados</span>';
+      : '<span class="muted">Sin participantes registrados</span>');
 
     return filaPrincipal + `<tr><td colspan="7" style="background:#faf5fe;padding:14px 18px">${detalle}</td></tr>`;
   }).join('');
@@ -1578,9 +1794,17 @@ document.getElementById('empBuscarTabla').addEventListener('input', renderEmplea
 
 // ---------- exportar a Excel ----------
 // Hoy en formato yyyy-MM-dd según el reloj local (toISOString usa UTC: después de las 6 pm da mañana)
-function hoyISO(){
-  const d = new Date();
+// Fecha en formato yyyy-MM-dd según el reloj local (toISOString usa UTC: después de las 6 pm da mañana)
+function isoLocal(d){
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+function hoyISO(){ return isoLocal(new Date()); }
+// Suma meses sin desbordar: 31 ene + 1 mes = 28/29 feb (no 3 de marzo)
+function sumarMeses(iso, meses){
+  const d = parseFechaLocal(iso);
+  if(!d) return '';
+  const ultimoDia = new Date(d.getFullYear(), d.getMonth() + meses + 1, 0).getDate();
+  return isoLocal(new Date(d.getFullYear(), d.getMonth() + meses, Math.min(d.getDate(), ultimoDia)));
 }
 function nombreArchivoFecha(base){
   return `${base}_${hoyISO()}.xlsx`;
@@ -1680,6 +1904,13 @@ function getParticipacionesSirceFiltradas(){
   });
 }
 
+// CURP: 4 letras, fecha AAMMDD, sexo (H, M o X), 5 letras, homoclave y dígito verificador
+const curpValida = (s) => /^[A-Z]{4}\d{6}[HMX][A-Z]{5}[A-Z0-9]\d$/.test(String(s || '').trim().toUpperCase());
+// RFC: 3 letras (empresa) o 4 (persona), fecha AAMMDD y homoclave de 3
+const rfcValido = (s) => /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(String(s || '').trim().toUpperCase());
+// Solo enlaces web: un "javascript:..." en la evidencia se ejecutaría al darle clic
+const esEnlaceWeb = (s) => /^https?:\/\/\S+$/i.test(String(s || '').trim());
+
 function construirFilaSirce(p){
   const emp = empleadoPorId(p.EmpleadoID) || {};
   const curso = cursoPorId(p.CursoID) || {};
@@ -1702,6 +1933,14 @@ function construirFilaSirce(p){
   if(!curso.RFCAgente) problemas.push('RFC del agente');
   if(!curso.ObjetivoClave) problemas.push('Objetivo de capacitación');
   if(!claveEstablecimiento) problemas.push('Clave de establecimiento');
+  // Formato: SIRCE rechaza el archivo si una CURP o RFC está mal escrito
+  if(emp.CURP && !curpValida(emp.CURP)) problemas.push('CURP inválida');
+  if(curso.RFCAgente && !rfcValido(curso.RFCAgente)) problemas.push('RFC del agente inválido');
+  const duracion = Number(curso.DuracionHoras || p.DuracionHoras) || 0;
+  if(duracion <= 0) problemas.push('Duración');
+  const inicio = curso.FechaImparticion || p.FechaImparticion;
+  const termino = curso.FechaTermino || inicio;
+  if(inicio && termino < inicio) problemas.push('Fecha de término antes del inicio');
 
   const fila = {
     'CURP': emp.CURP || '',
@@ -1718,8 +1957,8 @@ function construirFilaSirce(p){
     'NOMBRE CURSO': curso.Nombre || p.CursoNombre || '',
     'CLAVE AREA TEMATICA': curso.AreaTematicaClave || '',
     'DURACION': curso.DuracionHoras || p.DuracionHoras || '',
-    'FEC INICIO': fmtFechaSirce(p.FechaImparticion || curso.FechaImparticion),
-    'FEC TERMINO': fmtFechaSirce(p.FechaImparticion || curso.FechaImparticion),
+    'FEC INICIO': fmtFechaSirce(inicio),
+    'FEC TERMINO': fmtFechaSirce(termino),   // cursos anteriores sin fecha de término: la de inicio
     'CLAVE TIP AGENTE': curso.TipoAgenteClave || '',
     'RFC AGENTE STPS': curso.RFCAgente || '',
     'CLAVE MODALIDAD': curso.ModalidadClave || '',
@@ -1731,9 +1970,11 @@ function construirFilaSirce(p){
 
 document.getElementById('filtroSirceMes').addEventListener('change', renderSirce);
 document.getElementById('filtroSirceCurso').addEventListener('change', renderSirce);
+document.getElementById('filtroSirceEstado').addEventListener('change', renderSirce);
 document.getElementById('btnLimpiarFiltrosSirce').addEventListener('click', ()=>{
   document.getElementById('filtroSirceMes').value = '';
   document.getElementById('filtroSirceCurso').value = '';
+  document.getElementById('filtroSirceEstado').value = '';
   renderSirce();
 });
 
@@ -1750,9 +1991,11 @@ function renderSirce(){
   document.getElementById('kpiSirceConAvisos').textContent = filas.filter(f => f.problemas.length > 0).length;
 
   const tbody = document.getElementById('tblSirce');
-  if(!filas.length){ tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Sin registros que mostrar con los filtros actuales</td></tr>'; return; }
+  // "Solo con advertencias" cambia lo que se ve, no lo que se exporta
+  const visibles = document.getElementById('filtroSirceEstado').value === 'avisos' ? filas.filter(f => f.problemas.length) : filas;
+  if(!visibles.length){ tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Sin registros que mostrar con los filtros actuales</td></tr>'; return; }
 
-  const muestra = filas.slice(0, 200);
+  const muestra = visibles.slice(0, 200);
   tbody.innerHTML = muestra.map(({fila, problemas}) => {
     const estado = problemas.length
       ? `<span class="badge badge-warn" title="${escapeHtml(problemas.join(', '))}">Falta: ${escapeHtml(problemas.slice(0,2).join(', '))}${problemas.length>2 ? ' +'+(problemas.length-2) : ''}</span>`
@@ -1766,8 +2009,8 @@ function renderSirce(){
       <td>${estado}</td>
     </tr>`;
   }).join('');
-  if(filas.length > 200){
-    tbody.innerHTML += `<tr><td colspan="6" class="muted" style="text-align:center">…y ${filas.length - 200} más (se incluyen todas al exportar)</td></tr>`;
+  if(visibles.length > 200){
+    tbody.innerHTML += `<tr><td colspan="6" class="muted" style="text-align:center">…y ${visibles.length - 200} más (se incluyen todas al exportar)</td></tr>`;
   }
 }
 
@@ -1777,6 +2020,8 @@ document.getElementById('btnExportSirce').addEventListener('click', ()=>{
 
   const construidas = participaciones.map(construirFilaSirce);
   const conAvisos = construidas.filter(f => f.problemas.length > 0).length;
+  if(conAvisos && !confirm(`${conAvisos} de ${construidas.length} fila(s) tienen datos faltantes o inválidos y SIRCE podría rechazarlas.\n\n` +
+    'Para verlas: "Mostrar → Solo con advertencias".\n\n¿Descargar de todos modos?')) return;
 
   const aoaConstancias = [CONSTANCIAS_HEADERS, ...construidas.map(({fila}) => CONSTANCIAS_HEADERS.map(h => fila[h]))];
   const wsConstancias = XLSX.utils.aoa_to_sheet(aoaConstancias);
@@ -1899,78 +2144,367 @@ function jsArg(v){
 // Un solo formulario de alta (el completo): el rápido no guardaba fecha de alta ni claves SIRCE
 document.getElementById('btnAltaDesdeCurso').addEventListener('click', ()=> document.getElementById('btnAgregarEmpleadoManual').click());
 
-document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
-  const nombre = document.getElementById('cNombre').value.trim();
-  const fecha = document.getElementById('cFecha').value;
-  const duracion = document.getElementById('cDuracion').value;
-  const tieneVenc = document.getElementById('cVencimiento').checked;
-  const fechaVenc = document.getElementById('cFechaVenc').value;
+// ---------- catálogos: agentes capacitadores y cursos frecuentes ----------
+// Casillas del formulario de cada catálogo → columna de su hoja
+const CATALOGO_FORM = {
+  Agentes: { campos: { agNombre:'Nombre', agTipo:'TipoAgenteClave', agRfc:'RFCAgente', agInstructor:'Instructor' }, datalist: {} },
+  CatalogoCursos: { campos: { ccNombre:'Nombre', ccDuracion:'DuracionHoras', ccModalidad:'ModalidadClave', ccObjetivo:'ObjetivoClave',
+                              ccAgente:'AgenteID', ccAplica:'AplicaSIRCE', ccVigencia:'VigenciaMeses' },
+                    datalist: { ccArea:['AreaTematicaClave','areasTematicas'] } }
+};
+const catalogoEditando = { Agentes: null, CatalogoCursos: null };
+const listaCatalogo = (hoja) => (hoja === 'Agentes' ? STATE.agentes : STATE.catalogoCursos) || [];
+const agentePorId = (id) => (STATE.agentes || []).find(a => String(a.ID) === String(id));
+const agentePorNombre = (n) => (STATE.agentes || []).find(a => a.Nombre === n);
+const descCatalogo = (cat, clave) => clave ? textoDatalist(cat, clave) : '—';
 
-  if(!nombre) return toast('Escribe el nombre del curso', true);
-  if(!fecha) return toast('Selecciona la fecha en que se impartió', true);
-  if(!duracion || Number(duracion) <= 0) return toast('Captura la duración en horas', true);
-  if(tieneVenc && !fechaVenc) return toast('Captura la fecha de vencimiento', true);
+function llenarFormCatalogo(hoja, reg){
+  const def = CATALOGO_FORM[hoja];
+  Object.entries(def.campos).forEach(([id, campo]) => {
+    const el = document.getElementById(id);
+    if(el.tagName === 'SELECT') seleccionarOpcion(id, reg[campo] ?? (id === 'ccAplica' ? 'SI' : ''));
+    else el.value = reg[campo] ?? '';
+  });
+  Object.entries(def.datalist).forEach(([id, [campo, cat]]) => { document.getElementById(id).value = textoDatalist(cat, reg[campo]); });
+  catalogoEditando[hoja] = reg.ID ?? null;
+  document.getElementById('btnGuardar' + hoja).textContent = reg.ID != null ? 'Guardar cambios' : 'Agregar';
+  document.getElementById('btnCancelar' + hoja).style.display = reg.ID != null ? '' : 'none';
+}
+function leerFormCatalogo(hoja){
+  const def = CATALOGO_FORM[hoja], reg = {};
+  Object.entries(def.campos).forEach(([id, campo]) => { reg[campo] = document.getElementById(id).value.trim(); });
+  Object.entries(def.datalist).forEach(([id, [campo]]) => { reg[campo] = claveDeDatalistInput(id); });
+  if(reg.RFCAgente) reg.RFCAgente = reg.RFCAgente.toUpperCase();
+  if(catalogoEditando[hoja] != null) reg.ID = catalogoEditando[hoja];
+  return reg;
+}
+async function guardarCatalogo(hoja){
+  const reg = leerFormCatalogo(hoja);
+  if(!reg.Nombre) return toast('Escribe el nombre', true);
+  if(reg.RFCAgente && !rfcValido(reg.RFCAgente)) return toast('El RFC no tiene un formato válido (12 o 13 caracteres)', true);
+  if(reg.VigenciaMeses && !(Number(reg.VigenciaMeses) >= 0)) return toast('La vigencia debe ser un número de meses', true);
+  const btn = document.getElementById('btnGuardar' + hoja);
+  btn.disabled = true;
+  try{
+    await apiPost({ action:'upsertCatalogo', hoja, registro: reg });
+    toast(reg.ID != null ? 'Cambios guardados' : 'Agregado al catálogo');
+    llenarFormCatalogo(hoja, {});
+    await cargarDatos();
+  }catch(err){ toast('Error al guardar: ' + err.message, true); }
+  finally{ btn.disabled = false; }
+}
+function editarCatalogo(hoja, id){
+  const reg = listaCatalogo(hoja).find(r => String(r.ID) === String(id));
+  if(reg) llenarFormCatalogo(hoja, reg);
+}
+async function eliminarCatalogo(hoja, id){
+  if(!confirm('¿Eliminar del catálogo? Los cursos ya registrados no cambian.')) return;
+  try{
+    await apiPost({ action:'deleteCatalogo', hoja, id });
+    toast('Eliminado del catálogo');
+    if(String(catalogoEditando[hoja]) === String(id)) llenarFormCatalogo(hoja, {});
+    await cargarDatos();
+  }catch(err){ toast('Error al eliminar: ' + err.message, true); }
+}
+['Agentes', 'CatalogoCursos'].forEach(hoja => {
+  document.getElementById('btnGuardar' + hoja).addEventListener('click', () => guardarCatalogo(hoja));
+  document.getElementById('btnCancelar' + hoja).addEventListener('click', () => llenarFormCatalogo(hoja, {}));
+});
+
+function renderCatalogos(){
+  const acciones = (hoja, id) => `<td style="white-space:nowrap">
+      <button class="btn btn-ghost btn-sm" onclick="editarCatalogo('${hoja}', ${jsArg(id)})">Editar</button>
+      <button class="btn btn-danger btn-sm" onclick="eliminarCatalogo('${hoja}', ${jsArg(id)})">Eliminar</button></td>`;
+  const vacio = (n, txt) => `<tr><td colspan="${n}" class="empty-state">${txt}</td></tr>`;
+  const agentes = STATE.agentes || [], cursos = STATE.catalogoCursos || [];
+  document.getElementById('tblAgentes').innerHTML = agentes.map(a => `<tr>
+      <td>${escapeHtml(a.Nombre)}</td><td>${escapeHtml(descCatalogo('tiposAgente', a.TipoAgenteClave))}</td>
+      <td>${escapeHtml(a.RFCAgente || '—')}</td><td>${escapeHtml(a.Instructor || '—')}</td>${acciones('Agentes', a.ID)}</tr>`).join('')
+    || vacio(5, 'Sin agentes en el catálogo');
+  document.getElementById('tblCatalogoCursos').innerHTML = cursos.map(c => `<tr>
+      <td>${escapeHtml(c.Nombre)}</td><td>${escapeHtml(c.DuracionHoras || '—')} hrs</td>
+      <td>${escapeHtml(descCatalogo('areasTematicas', c.AreaTematicaClave))}</td>
+      <td>${escapeHtml((agentePorId(c.AgenteID) || {}).Nombre || '—')}</td>
+      <td>${c.AplicaSIRCE === 'NO' ? 'No' : 'Sí'}</td>
+      <td>${Number(c.VigenciaMeses) > 0 ? escapeHtml(c.VigenciaMeses) + ' meses' : 'No vence'}</td>${acciones('CatalogoCursos', c.ID)}</tr>`).join('')
+    || vacio(7, 'Sin cursos en el catálogo');
+  // listas para elegir: en "Registrar curso" el agente se guarda por nombre (así se ve aunque luego se borre del catálogo)
+  const nombreCurso = (id) => (cursos.find(c => String(c.ID) === String(id)) || {}).Nombre || id;
+  const nombreAgente = (id) => (agentePorId(id) || {}).Nombre || id;
+  poblarSelect(document.getElementById('cCatalogoCurso'), cursos.map(c => String(c.ID)), nombreCurso);
+  poblarSelect(document.getElementById('cAgente'), agentes.map(a => a.Nombre));
+  poblarSelect(document.getElementById('ccAgente'), agentes.map(a => String(a.ID)), nombreAgente);
+}
+
+// "Registrar curso": elegir del catálogo llena el formulario (todo se puede seguir editando a mano)
+function aplicarAgente(ag){
+  if(!ag) return;
+  seleccionarOpcion('cTipoAgente', ag.TipoAgenteClave);
+  document.getElementById('cRfcAgente').value = ag.RFCAgente || '';
+  if(ag.Instructor) document.getElementById('cInstructor').value = ag.Instructor;
+}
+function recalcularVencimiento(){
+  const cc = (STATE.catalogoCursos || []).find(c => String(c.ID) === document.getElementById('cCatalogoCurso').value);
+  const meses = Number(cc && cc.VigenciaMeses) || 0;
+  const base = document.getElementById('cFechaFin').value || document.getElementById('cFecha').value;
+  if(meses > 0 && base) document.getElementById('cFechaVenc').value = sumarMeses(base, meses);
+}
+document.getElementById('cCatalogoCurso').addEventListener('change', (e)=>{
+  const cc = (STATE.catalogoCursos || []).find(c => String(c.ID) === e.target.value);
+  if(!cc) return;
+  document.getElementById('cNombre').value = cc.Nombre || '';
+  document.getElementById('cDuracion').value = cc.DuracionHoras || '';
+  document.getElementById('cAreaTematica').value = textoDatalist('areasTematicas', cc.AreaTematicaClave);
+  seleccionarOpcion('cModalidad', cc.ModalidadClave);
+  seleccionarOpcion('cObjetivo', cc.ObjetivoClave);
+  marcarRadio('aplicaSirce', cc.AplicaSIRCE === 'NO' ? 'NO' : 'SI');
+  const ag = agentePorId(cc.AgenteID);
+  if(ag){ document.getElementById('cAgente').value = ag.Nombre; aplicarAgente(ag); }
+  document.getElementById('cVencimiento').checked = Number(cc.VigenciaMeses) > 0;
+  recalcularVencimiento();
+  actualizarSeccionesCurso();
+});
+document.getElementById('cAgente').addEventListener('change', (e)=> aplicarAgente(agentePorNombre(e.target.value)));
+['cFecha', 'cFechaFin'].forEach(id => document.getElementById(id).addEventListener('change', recalcularVencimiento));
+
+// ---------- reentrenamiento por empleado ----------
+// Por empleado en ALTA y por curso (mismo curso del catálogo o mismo nombre): la vez más reciente que
+// asistió y aprobó. Si esa vez tiene vencimiento y ya venció o vence en ≤ 30 días, se avisa.
+function reentrenamientosPendientes(){
+  const out = [];
+  STATE.empleados.filter(e => String(e.Estatus).toUpperCase() === 'ALTA').forEach(e => {
+    const ultimaPorCurso = new Map();
+    cursosDe(e.ID).filter(p => p.Aprobado !== 'NO').forEach(p => {
+      const c = cursoPorId(p.CursoID);
+      if(!c) return;
+      const clave = c.CatalogoCursoID ? 'cat:' + c.CatalogoCursoID : 'nom:' + normTxt(c.Nombre);
+      const previa = ultimaPorCurso.get(clave);
+      if(!previa || String(c.FechaImparticion) > String(previa.FechaImparticion)) ultimaPorCurso.set(clave, c);
+    });
+    ultimaPorCurso.forEach(c => {
+      if(c.TieneVencimiento !== 'SI') return;
+      const dias = daysUntil(c.FechaVencimiento);
+      if(dias !== null && dias <= 30) out.push({ e, c, dias });
+    });
+  });
+  return out.sort((a, b) => a.dias - b.dias);
+}
+function renderReentrenamiento(){
+  const lista = reentrenamientosPendientes();
+  document.getElementById('reentrenamientoCuenta').textContent = lista.length ? `(${lista.length})` : '';
+  const tbody = document.getElementById('tblReentrenamiento');
+  if(!lista.length){ tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nadie tiene reentrenamiento pendiente</td></tr>'; return; }
+  tbody.innerHTML = lista.map(({e, c, dias}) => `<tr>
+      <td><b>${escapeHtml(e.Nombre)}</b></td><td>${escapeHtml(e.Puesto || '—')}</td><td>${escapeHtml(e.Departamento || '—')}</td>
+      <td>${escapeHtml(c.Nombre)}</td><td>${fmtDate(c.FechaVencimiento)}</td>
+      <td><span class="badge ${dias < 0 ? 'badge-danger' : 'badge-warn'}">${dias < 0 ? `Vencido hace ${-dias} día${dias === -1 ? '' : 's'}`
+          : dias === 0 ? 'Vence hoy' : `Vence en ${dias} día${dias === 1 ? '' : 's'}`}</span></td></tr>`).join('');
+}
+
+// ---------- constancias DC-3 ----------
+// Diseño basado en el formato DC-3 de la STPS: compararlo una vez con el formato oficial vigente antes de usarlo.
+function htmlDC3(e, c, cfg){
+  const val = (v) => `<span class="dc3-val">${escapeHtml(v || '')}</span>`;
+  const cajas = (txt, n) => Array.from({length: n}, (_, i) => `<span class="caja">${escapeHtml(String(txt || '').toUpperCase()[i] || '')}</span>`).join('');
+  const fecha = (iso) => {
+    const d = parseFechaLocal(iso);
+    return d ? `${cajas(String(d.getFullYear()), 4)} ${cajas(String(d.getMonth()+1).padStart(2,'0'), 2)} ${cajas(String(d.getDate()).padStart(2,'0'), 2)}`
+             : `${cajas('', 4)} ${cajas('', 2)} ${cajas('', 2)}`;
+  };
+  const nombre = [e.ApellidoPaterno, e.ApellidoMaterno, e.NombrePila].filter(Boolean).join(' ') || e.Nombre;
+  return `<div class="dc3">
+    <div class="dc3-titulo">FORMATO DC-3<br>CONSTANCIA DE COMPETENCIAS O DE HABILIDADES LABORALES</div>
+    <table>
+      <tr><th colspan="2">DATOS DEL TRABAJADOR</th></tr>
+      <tr><td colspan="2"><span class="dc3-et">Nombre (anotar apellido paterno, apellido materno y nombre (s))</span>${val(nombre)}</td></tr>
+      <tr><td style="width:50%"><span class="dc3-et">Clave Única de Registro de Población</span>${cajas(e.CURP, 18)}</td>
+          <td><span class="dc3-et">Ocupación específica (Catálogo Nacional de Ocupaciones)</span>${val(e.OcupacionClave ? textoDatalist('ocupaciones', e.OcupacionClave) : '')}</td></tr>
+      <tr><td colspan="2"><span class="dc3-et">Puesto</span>${val(e.Puesto)}</td></tr>
+    </table>
+    <table>
+      <tr><th>DATOS DE LA EMPRESA</th></tr>
+      <tr><td><span class="dc3-et">Nombre o razón social (en caso de persona física, anotar apellido paterno, apellido materno y nombre(s))</span>${val(cfg.RazonSocial)}</td></tr>
+      <tr><td><span class="dc3-et">Registro Federal de Contribuyentes con homoclave (SHCP)</span>${val(cfg.RFCEmpresa)}</td></tr>
+    </table>
+    <table>
+      <tr><th colspan="2">DATOS DEL PROGRAMA DE CAPACITACIÓN, ADIESTRAMIENTO Y PRODUCTIVIDAD</th></tr>
+      <tr><td colspan="2"><span class="dc3-et">Nombre del curso</span>${val(c.Nombre)}</td></tr>
+      <tr><td style="width:30%"><span class="dc3-et">Duración en horas</span>${val(c.DuracionHoras)}</td>
+          <td><span class="dc3-et">Periodo de ejecución: de (año / mes / día) a (año / mes / día)</span>
+            De ${fecha(c.FechaImparticion)} &nbsp; a ${fecha(c.FechaTermino || c.FechaImparticion)}</td></tr>
+      <tr><td colspan="2"><span class="dc3-et">Área temática del curso</span>${val(c.AreaTematicaClave ? textoDatalist('areasTematicas', c.AreaTematicaClave) : '')}</td></tr>
+      <tr><td colspan="2"><span class="dc3-et">Nombre del agente capacitador o STPS</span>${val(c.AgenteNombre || c.Instructor)}</td></tr>
+    </table>
+    <div class="dc3-protesta">Los datos se asientan en esta constancia bajo protesta de decir verdad, apercibidos de la responsabilidad en que incurre todo aquel que no se conduce con verdad.</div>
+    <div class="dc3-firmas">
+      <div>${escapeHtml(c.Instructor || '')}<br>Instructor o tutor<br>Nombre y firma</div>
+      <div>${escapeHtml(cfg.RepresentanteLegal || '')}<br>Patrón o representante legal<br>Nombre y firma</div>
+      <div>${escapeHtml(cfg.RepresentanteTrabajadores || '')}<br>Representante de los trabajadores<br>Nombre y firma</div>
+    </div>
+  </div>`;
+}
+
+// Una DC-3 por participante que asistió y aprobó (LFT art. 153-V). Avisa qué falta antes de imprimir.
+function generarDC3(cursoId){
+  const c = cursoPorId(cursoId);
+  if(!c) return toast('Ese curso ya no existe. Recarga la página.', true);
+  const cfg = STATE.config || {};
+  const faltaEmpresa = [['RazonSocial','razón social'], ['RFCEmpresa','RFC de la empresa'], ['RepresentanteLegal','representante legal'],
+    ['RepresentanteTrabajadores','representante de los trabajadores']].filter(([k]) => !String(cfg[k] || '').trim()).map(([, t]) => t);
+  if(faltaEmpresa.length) return toast('Para las DC-3 falta en ⚙️ Configuración: ' + faltaEmpresa.join(', '), true);
+  const aprobados = participantesDe(cursoId).filter(p => asistio(p) && p.Aprobado !== 'NO');
+  if(!aprobados.length) return toast('Este curso no tiene participantes que asistieron y aprobaron', true);
+
+  const avisos = [];
+  const faltaCurso = [[c.AreaTematicaClave, 'área temática'], [c.Instructor, 'instructor'], [Number(c.DuracionHoras) > 0, 'duración']]
+    .filter(([v]) => !v).map(([, t]) => t);
+  if(faltaCurso.length) avisos.push('Curso: ' + faltaCurso.join(', '));
+  const empleados = aprobados.map(p => {
+    const e = empleadoPorId(p.EmpleadoID) || { Nombre: p.EmpleadoNombre };
+    const falta = [[curpValida(e.CURP), 'CURP'], [e.ApellidoPaterno, 'apellidos'], [e.OcupacionClave, 'ocupación'], [e.Puesto, 'puesto']]
+      .filter(([v]) => !v).map(([, t]) => t);
+    if(falta.length) avisos.push(`${e.Nombre}: ${falta.join(', ')}`);
+    return e;
+  });
+  if(avisos.length && !confirm('Faltan datos en algunas constancias:\n\n• ' + avisos.slice(0, 15).join('\n• ') +
+    (avisos.length > 15 ? `\n… y ${avisos.length - 15} más` : '') + '\n\n¿Imprimir de todos modos?')) return;
+
+  document.getElementById('areaImpresion').innerHTML = empleados.map(e => htmlDC3(e, c, cfg)).join('');
+  document.body.classList.add('imprimiendo-dc3');
+  window.print();   // desde el diálogo de impresión se puede "Guardar como PDF"
+}
+window.addEventListener('afterprint', () => {
+  document.body.classList.remove('imprimiendo-dc3');
+  document.getElementById('areaImpresion').innerHTML = '';
+});
+
+// ---------- formulario de curso (registrar y editar usan el mismo) ----------
+// Qué campo de la hoja Cursos corresponde a cada casilla del formulario
+const CAMPOS_TEXTO_CURSO = { cNombre:'Nombre', cFecha:'FechaImparticion', cFechaFin:'FechaTermino', cDuracion:'DuracionHoras',
+  cFechaVenc:'FechaVencimiento', cRfcAgente:'RFCAgente', cFechaEmisionCert:'FechaEmisionCertificado',
+  cInstructor:'Instructor', cEvidencia:'EvidenciaURL' };
+const CAMPOS_SELECT_CURSO = { cModalidad:'ModalidadClave', cTipoAgente:'TipoAgenteClave', cObjetivo:'ObjetivoClave',
+  cCatalogoCurso:'CatalogoCursoID', cAgente:'AgenteNombre' };
+const CAMPOS_DATALIST_CURSO = { cAreaTematica:['AreaTematicaClave','areasTematicas'], cClaveCompetencia:['ClaveCompetencia','normas'] };
+
+// Texto de una casilla con lista de catálogo SIRCE ("6000 - SEGURIDAD"); vacío si no hay clave
+function textoDatalist(cat, clave){
+  clave = String(clave ?? '');
+  if(!clave) return '';
+  const desc = (SC[cat].find(x => String(x[0]) === clave) || [])[1];
+  return `${clave} - ${desc || ''}`;
+}
+
+let cursoEditandoId = null;   // null = registrando un curso nuevo
+
+const marcarRadio = (name, value) => { document.querySelector(`input[name="${name}"][value="${value}"]`).checked = true; };
+// Muestra u oculta las partes del formulario que dependen de casillas y radios
+function actualizarSeccionesCurso(){
+  document.getElementById('cFechaVencWrap').style.display = document.getElementById('cVencimiento').checked ? 'block' : 'none';
+  document.getElementById('faltaronWrap').style.display = huboInasistencia() ? 'block' : 'none';
+  document.getElementById('noAprobaronWrap').style.display = radioMarcado('aprobaronTodos') === 'no' ? 'block' : 'none';
+  document.getElementById('cSirceDetalles').style.display = radioMarcado('aplicaSirce') === 'NO' ? 'none' : '';
+}
+
+// Llena el formulario con un curso (vacío {} = formulario en blanco) y sus participaciones
+function llenarFormCurso(c, parts){
+  Object.entries(CAMPOS_TEXTO_CURSO).forEach(([id, campo]) => { document.getElementById(id).value = c[campo] ?? ''; });
+  Object.entries(CAMPOS_SELECT_CURSO).forEach(([id, campo]) => seleccionarOpcion(id, c[campo]));
+  Object.entries(CAMPOS_DATALIST_CURSO).forEach(([id, [campo, cat]]) => { document.getElementById(id).value = textoDatalist(cat, c[campo]); });
+  document.getElementById('cVencimiento').checked = c.TieneVencimiento === 'SI';
+  // la ficha guardada puede venir sin ceros (1234) o con ellos ("001234"): se usa la del catálogo
+  const idReal = (id) => String((empleadoPorId(id) || {}).ID ?? id);
+  seleccionEmpleados.clear(); seleccionFaltaron.clear(); seleccionNoAprobaron.clear();
+  parts.forEach(p => {
+    const id = idReal(p.EmpleadoID);
+    seleccionEmpleados.add(id);
+    if(!asistio(p)) seleccionFaltaron.add(id);
+    else if(p.Aprobado === 'NO') seleccionNoAprobaron.add(id);
+  });
+  marcarRadio('huboInasistencia', seleccionFaltaron.size ? 'si' : 'no');
+  marcarRadio('aprobaronTodos', seleccionNoAprobaron.size ? 'no' : 'si');
+  marcarRadio('aplicaSirce', c.AplicaSIRCE === 'NO' ? 'NO' : 'SI');
+  document.getElementById('empSeleccionados').textContent = seleccionEmpleados.size;
+  renderPicker(); renderFaltaronLista(); renderNoAprobaronLista();
+  actualizarSeccionesCurso();
+}
+
+function leerFormCurso(){
+  const curso = {};
+  Object.entries(CAMPOS_TEXTO_CURSO).forEach(([id, campo]) => { curso[campo] = document.getElementById(id).value.trim(); });
+  Object.entries(CAMPOS_SELECT_CURSO).forEach(([id, campo]) => { curso[campo] = document.getElementById(id).value; });
+  Object.entries(CAMPOS_DATALIST_CURSO).forEach(([id, [campo]]) => { curso[campo] = claveDeDatalistInput(id); });
+  curso.TieneVencimiento = document.getElementById('cVencimiento').checked;
+  if(!curso.TieneVencimiento) curso.FechaVencimiento = '';
+  curso.RFCAgente = curso.RFCAgente.toUpperCase();
+  curso.AplicaSIRCE = radioMarcado('aplicaSirce');
+  return curso;
+}
+
+function modoEdicionCurso(id){
+  cursoEditandoId = id == null ? null : String(id);
+  const editando = cursoEditandoId !== null;
+  document.getElementById('tituloFormCurso').textContent = editando ? 'Editar curso' : 'Registrar curso de capacitación';
+  document.getElementById('btnGuardarCurso').textContent = editando ? 'Guardar cambios' : 'Guardar curso';
+  document.getElementById('btnCancelarEdicionCurso').style.display = editando ? '' : 'none';
+}
+function limpiarFormCurso(){ llenarFormCurso({}, []); modoEdicionCurso(null); }
+
+function editarCurso(id){
+  const c = cursoPorId(id);
+  if(!c) return toast('Ese curso ya no existe. Recarga la página.', true);
+  const hayCaptura = document.getElementById('cNombre').value.trim() || seleccionEmpleados.size;
+  if(hayCaptura && cursoEditandoId !== String(id) &&
+     !confirm('Hay una captura sin guardar en "Registrar curso". ¿Reemplazarla con este curso?')) return;
+  llenarFormCurso(c, participantesDe(id));
+  modoEdicionCurso(id);
+  document.querySelector('.tab-btn[data-view="cursos"]').click();
+  window.scrollTo(0, 0);
+}
+document.getElementById('btnCancelarEdicionCurso').addEventListener('click', limpiarFormCurso);
+
+document.getElementById('btnGuardarCurso').addEventListener('click', async ()=>{
+  const curso = leerFormCurso();
+  if(!curso.Nombre) return toast('Escribe el nombre del curso', true);
+  if(!curso.FechaImparticion) return toast('Selecciona la fecha de inicio', true);
+  if(curso.FechaTermino && curso.FechaTermino < curso.FechaImparticion) return toast('La fecha de término no puede ser anterior a la de inicio', true);
+  if(!curso.DuracionHoras || Number(curso.DuracionHoras) <= 0) return toast('Captura la duración en horas', true);
+  if(curso.TieneVencimiento && !curso.FechaVencimiento) return toast('Captura la fecha de vencimiento', true);
+  if(curso.EvidenciaURL && !esEnlaceWeb(curso.EvidenciaURL)) return toast('La evidencia debe ser un enlace que empiece con https://', true);
   const faltaronIds = faltaronActuales();
   if(huboInasistencia() && !faltaronIds.length) return toast('Marca quién faltó o cambia "¿Hubo inasistencia?" a No', true);
 
+  const editando = cursoEditandoId;
   // Bloqueado mientras guarda: un doble clic registraba el curso dos veces y duplicaba horas
   const btn = document.getElementById('btnGuardarCurso');
   btn.disabled = true;
   try{
     await apiPost({
-      action:'addCurso',
-      curso:{
-        Nombre: nombre,
-        FechaImparticion: fecha,
-        DuracionHoras: duracion,
-        TieneVencimiento: tieneVenc,
-        FechaVencimiento: tieneVenc ? fechaVenc : '',
-        AreaTematicaClave: claveDeDatalistInput('cAreaTematica'),
-        ModalidadClave: document.getElementById('cModalidad').value,
-        TipoAgenteClave: document.getElementById('cTipoAgente').value,
-        RFCAgente: document.getElementById('cRfcAgente').value.trim().toUpperCase(),
-        ObjetivoClave: document.getElementById('cObjetivo').value,
-        ClaveCompetencia: claveDeDatalistInput('cClaveCompetencia'),
-        FechaEmisionCertificado: document.getElementById('cFechaEmisionCert').value,
-        AplicaSIRCE: radioMarcado('aplicaSirce')
-      },
+      action: editando ? 'updateCurso' : 'addCurso',
+      id: editando,
+      curso,
       empleadoIds: Array.from(seleccionEmpleados),
       faltaronIds,
       // Si al final quedó "Sí", se ignora lo que se haya palomeado antes en "No"; quien faltó nunca cuenta como reprobado
       noAprobadosIds: radioMarcado('aprobaronTodos') === 'no'
         ? Array.from(seleccionNoAprobaron).filter(id => seleccionEmpleados.has(id) && !faltaronIds.includes(id)) : []
     });
-    toast('Curso guardado y horas acumuladas');
-    document.getElementById('cNombre').value='';
-    document.getElementById('cFecha').value='';
-    document.getElementById('cDuracion').value='';
-    document.getElementById('cVencimiento').checked=false;
-    document.getElementById('cFechaVenc').value='';
-    document.getElementById('cFechaVencWrap').style.display='none';
-    document.getElementById('cAreaTematica').value='';
-    document.getElementById('cModalidad').value='';
-    document.getElementById('cTipoAgente').value='';
-    document.getElementById('cRfcAgente').value='';
-    document.getElementById('cObjetivo').value='';
-    document.getElementById('cClaveCompetencia').value='';
-    document.getElementById('cFechaEmisionCert').value='';
-    document.querySelector('input[name="aprobaronTodos"][value="si"]').checked = true;
-    document.getElementById('noAprobaronWrap').style.display = 'none';
-    document.querySelector('input[name="huboInasistencia"][value="no"]').checked = true;
-    document.getElementById('faltaronWrap').style.display = 'none';
-    document.querySelector('input[name="aplicaSirce"][value="SI"]').checked = true;
-    document.getElementById('cSirceDetalles').style.display = '';
-    seleccionEmpleados.clear();
-    seleccionNoAprobaron.clear();
-    seleccionFaltaron.clear();
+    toast(editando ? 'Cambios guardados' : 'Curso guardado y horas acumuladas');
+    limpiarFormCurso();
     await cargarDatos();
+    if(editando) document.querySelector('.tab-btn[data-view="listaCursos"]').click();
   }catch(err){ toast('Error al guardar curso: ' + err.message, true); }
   finally{ btn.disabled = false; }
 });
 
 async function eliminarCurso(id){
-  if(!confirm('¿Eliminar este curso y sus registros de participación?')) return;
-  try{ await apiPost({action:'deleteCurso', id}); toast('Curso eliminado'); await cargarDatos(); }
+  if(!confirm('¿Eliminar este curso y sus registros de participación?\n\nQueda una copia en la hoja "Historial" por si hay que recuperarlo.')) return;
+  try{
+    await apiPost({action:'deleteCurso', id});
+    toast('Curso eliminado');
+    if(cursoEditandoId === String(id)) limpiarFormCurso();   // no dejar abierto en edición un curso que ya no existe
+    await cargarDatos();
+  }
   catch(err){ toast('Error al eliminar: ' + err.message, true); }
 }
 async function eliminarEmpleado(id){
@@ -2441,6 +2975,15 @@ function autoprueba(){
     [mapCatalogoAClave('escolaridad','Preparatoria'), '4'],
     [fmtFechaSirce('2026-08-20'), '20/08/2026'],
     [mesKey('2026-08-01'), '2026-08'],
+    [curpValida('PEGJ800101HCLRRN01'), true],
+    [curpValida('PEGJ800101'), false],
+    [rfcValido('GOHJ720614J51'), true],
+    [rfcValido('MET850101AB1'), true],
+    [rfcValido('ABC'), false],
+    [esEnlaceWeb('https://drive.google.com/x'), true],
+    [esEnlaceWeb('javascript:alert(1)'), false],
+    [sumarMeses('2026-01-31', 1), '2026-02-28'],
+    [sumarMeses('2026-10-03', 12), '2027-10-03'],
     [jsArg(`x');alert(1);//`), '&quot;x&#39;);alert(1);//&quot;'],
     [idKey('001234'), idKey(1234)],
     [fechaDeCelda(46235), '2026-08-01'],
