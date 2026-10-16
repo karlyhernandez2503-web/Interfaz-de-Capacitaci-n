@@ -199,9 +199,9 @@
   #areaImpresion{display:none;}
   @media print{
     @page{size:letter;margin:12mm;}
-    body.imprimiendo-dc3{background:#fff;}
-    body.imprimiendo-dc3 > :not(#areaImpresion){display:none !important;}
-    body.imprimiendo-dc3 #areaImpresion{display:block;}
+    body.imprimiendo{background:#fff;}
+    body.imprimiendo > :not(#areaImpresion){display:none !important;}
+    body.imprimiendo #areaImpresion{display:block;}
   }
   .dc3{font-family:Arial,Helvetica,sans-serif;font-size:9.5pt;color:#000;page-break-after:always;break-after:page;}
   .dc3:last-child{page-break-after:auto;break-after:auto;}
@@ -291,6 +291,7 @@
   <button class="tab-btn" data-view="listaCursos">Cursos</button>
   <button class="tab-btn" data-view="empleados">Empleados y horas</button>
   <button class="tab-btn" data-view="sirce">SIRCE (STPS)</button>
+  <button class="tab-btn" data-view="cumplimiento">Cumplimiento</button>
   <button class="tab-btn" data-view="catalogos">Catálogos</button>
   <button class="tab-btn" data-view="historial">Historial</button>
 </nav>
@@ -317,6 +318,7 @@
       <div class="kpi"><div class="num" id="kpiEmpleados">0</div><div class="label">Empleados en catálogo</div></div>
       <div class="kpi"><div class="num" id="kpiHoras">0</div><div class="label">Horas de capacitación acumuladas</div></div>
       <div class="kpi"><div class="num" id="kpiPorVencer">0</div><div class="label">Cursos por vencer (30 días)</div></div>
+      <div class="kpi"><div class="num" id="kpiCumplimiento">—</div><div class="label">Cumplimiento de obligatorios</div></div>
     </div>
 
     <h2>⚠️ Nuevos ingresos: Seguimiento 30 días</h2>
@@ -746,6 +748,53 @@
     </div>
   </section>
 
+  <!-- CUMPLIMIENTO -->
+  <section id="view-cumplimiento" class="view">
+    <h2>Cumplimiento de cursos obligatorios</h2>
+    <p class="section-sub">Empleados en ALTA contra los cursos obligatorios de su puesto (se definen en Catálogos → Cursos frecuentes → "Obligatorio para"). Cuenta la vez más reciente que asistió y aprobó; "por vencer" todavía cuenta como cumplido.</p>
+
+    <div class="kpis">
+      <div class="kpi"><div class="num" id="kpiCumplPct">—</div><div class="label">Cumplimiento</div></div>
+      <div class="kpi"><div class="num" id="kpiCumplCompletos">0</div><div class="label">Empleados al 100%</div></div>
+      <div class="kpi"><div class="num" id="kpiCumplPendientes">0</div><div class="label">Cursos pendientes</div></div>
+      <div class="kpi"><div class="num" id="kpiCumplVencidos">0</div><div class="label">Cursos vencidos</div></div>
+    </div>
+
+    <div class="filter-bar">
+      <div><label>Planta / Departamento</label><select id="filtroCumplPlanta"><option value="">Todas las plantas</option></select></div>
+      <div><label>Puesto</label><select id="filtroCumplPuesto"><option value="">Todos los puestos</option></select></div>
+      <div><label>Curso obligatorio</label><select id="filtroCumplCurso"><option value="">Todos los cursos</option></select></div>
+      <div><label>Mostrar</label>
+        <select id="filtroCumplEstado">
+          <option value="">Todos los empleados</option>
+          <option value="incompletos">Solo con algo pendiente o vencido</option>
+          <option value="pendiente">Con pendientes</option>
+          <option value="vencido">Con vencidos</option>
+        </select>
+      </div>
+      <div class="filter-actions">
+        <button class="btn btn-ghost btn-sm" id="btnLimpiarFiltrosCumpl">Limpiar filtros</button>
+        <button class="btn btn-primary btn-sm" id="btnExportCumpl">📊 Exportar a Excel</button>
+      </div>
+    </div>
+
+    <h2 style="font-size:16px">Por planta</h2>
+    <div class="table-wrap" style="margin-bottom:24px">
+      <table>
+        <thead><tr><th>Planta / Departamento</th><th>Empleados</th><th>Cursos requeridos</th><th>Cumplidos</th><th>Cumplimiento</th></tr></thead>
+        <tbody id="tblCumplPlantas"></tbody>
+      </table>
+    </div>
+
+    <h2 style="font-size:16px">Por empleado</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Empleado</th><th>Puesto</th><th>Planta</th><th>Cumplimiento</th><th>Le falta</th><th></th></tr></thead>
+        <tbody id="tblCumplEmpleados"></tbody>
+      </table>
+    </div>
+  </section>
+
   <!-- CATÁLOGOS -->
   <section id="view-catalogos" class="view">
     <h2>Agentes capacitadores</h2>
@@ -778,6 +827,14 @@
       <div><label>Agente capacitador</label><select id="ccAgente"><option value="">— Ninguno —</option></select></div>
       <div><label>¿Aplica SIRCE?</label><select id="ccAplica"><option value="SI">Sí</option><option value="NO">No</option></select></div>
       <div><label>Vigencia (meses)</label><input type="number" id="ccVigencia" min="0" step="1" placeholder="0 = no vence"></div>
+      <div style="min-width:230px">
+        <label>Obligatorio para</label>
+        <label style="display:flex;gap:6px;align-items:center;font-weight:400;text-transform:none;letter-spacing:0;margin:0 0 6px;font-size:13px">
+          <input type="checkbox" id="ccTodos" style="width:auto"> Todo el personal
+        </label>
+        <select id="ccPuestos" multiple size="4"></select>
+        <span class="muted" style="font-size:11px">Ctrl + clic para elegir varios puestos. Sin selección = no es obligatorio.</span>
+      </div>
       <div class="filter-actions">
         <button class="btn btn-primary btn-sm" id="btnGuardarCatalogoCursos">Agregar</button>
         <button class="btn btn-ghost btn-sm" id="btnCancelarCatalogoCursos" style="display:none">Cancelar</button>
@@ -785,7 +842,7 @@
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Curso</th><th>Duración</th><th>Área temática</th><th>Agente</th><th>SIRCE</th><th>Vigencia</th><th></th></tr></thead>
+        <thead><tr><th>Curso</th><th>Duración</th><th>Área temática</th><th>Agente</th><th>SIRCE</th><th>Vigencia</th><th>Obligatorio para</th><th></th></tr></thead>
         <tbody id="tblCatalogoCursos"></tbody>
       </table>
     </div>
@@ -911,6 +968,17 @@
       <button class="btn btn-ghost" id="btnCancelarEdicionEmpleado">Cancelar</button>
     </div>
     <div id="editEmpMsg" style="margin-top:10px;font-size:12.5px"></div>
+  </div>
+</div>
+
+<!-- EXPEDIENTE DEL EMPLEADO -->
+<div id="expedienteOverlay" class="config-overlay hidden">
+  <div class="config-modal" style="max-width:920px">
+    <div id="expedienteContenido"></div>
+    <div style="display:flex;gap:10px;margin-top:18px;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btnImprimirExpediente">🖨 Imprimir expediente</button>
+      <button class="btn btn-ghost" id="btnCerrarExpediente">Cerrar</button>
+    </div>
   </div>
 </div>
 
@@ -1394,6 +1462,7 @@ function render(){
   renderSirce();
   renderHistorial();
   renderCatalogos();
+  renderCumplimiento();
 }
 
 // ---------- historial de cambios ----------
@@ -1443,14 +1512,17 @@ let INDICES = null;
 function indices(){
   if(INDICES && INDICES.state === STATE) return INDICES;
   const agregar = (mapa, k, v) => { const lista = mapa.get(k); lista ? lista.push(v) : mapa.set(k, [v]); };
-  const porEmpleado = new Map(), porCurso = new Map(), empleados = new Map(), cursos = new Map();
+  const porEmpleado = new Map(), todasPorEmpleado = new Map(), porCurso = new Map(), empleados = new Map(), cursos = new Map();
   STATE.participaciones.forEach(p => {
     if(asistio(p)) agregar(porEmpleado, idKey(p.EmpleadoID), p);   // cursosDe = cursos tomados (sin faltas)
+    agregar(todasPorEmpleado, idKey(p.EmpleadoID), p);             // expediente: también las faltas
     agregar(porCurso, String(p.CursoID), p);                       // participantesDe = todos, incluidas faltas
   });
+  const catalogoPorNombre = new Map();
+  (STATE.catalogoCursos || []).forEach(cc => { if(!catalogoPorNombre.has(normTxt(cc.Nombre))) catalogoPorNombre.set(normTxt(cc.Nombre), cc.ID); });
   STATE.empleados.forEach(e => { if(!empleados.has(idKey(e.ID))) empleados.set(idKey(e.ID), e); });   // igual que find(): gana el primero
   STATE.cursos.forEach(c => { if(!cursos.has(String(c.ID))) cursos.set(String(c.ID), c); });
-  return INDICES = { state: STATE, porEmpleado, porCurso, empleados, cursos };
+  return INDICES = { state: STATE, porEmpleado, todasPorEmpleado, porCurso, empleados, cursos, catalogoPorNombre };
 }
 function cursosDe(empleadoId){
   return indices().porEmpleado.get(idKey(empleadoId)) || [];
@@ -1784,6 +1856,7 @@ function renderEmpleadosTabla(){
       <td title="${escapeHtml(nombresCursos)}">${parts.length}</td>
       <td><b>${horas.toFixed(1).replace(/\.0$/,'')}</b> hrs</td>
       <td>
+        <button class="btn btn-primary btn-sm" onclick="abrirExpediente(${jsArg(e.ID)})">Expediente</button>
         <button class="btn btn-ghost btn-sm" onclick="abrirEditarEmpleado(${jsArg(e.ID)})">Editar</button>
         <button class="btn btn-danger btn-sm" onclick="eliminarEmpleado(${jsArg(e.ID)})">Eliminar</button>
       </td>
@@ -2158,6 +2231,32 @@ const agentePorId = (id) => (STATE.agentes || []).find(a => String(a.ID) === Str
 const agentePorNombre = (n) => (STATE.agentes || []).find(a => a.Nombre === n);
 const descCatalogo = (cat, clave) => clave ? textoDatalist(cat, clave) : '—';
 
+// "Obligatorio para": '*' = todo el personal; si no, puestos separados por '|'; vacío = no es obligatorio
+const puestosObligatorio = (valor) => String(valor || '').split('|').map(s => s.trim()).filter(Boolean);
+function textoObligatorio(valor){
+  if(String(valor).trim() === '*') return '<span class="badge badge-neutral">Todo el personal</span>';
+  const p = puestosObligatorio(valor);
+  return p.length ? `<span title="${escapeHtml(p.join(', '))}">${escapeHtml(p.length <= 2 ? p.join(', ') : p.length + ' puestos')}</span>` : '—';
+}
+function llenarObligatorio(valor){
+  const todos = String(valor || '').trim() === '*';
+  const sel = document.getElementById('ccPuestos');
+  const elegidos = new Set(todos ? [] : puestosObligatorio(valor).map(normTxt));
+  sel.querySelectorAll('option[data-extra]').forEach(o => o.remove());
+  [...sel.options].forEach(o => { o.selected = elegidos.has(normTxt(o.value)); elegidos.delete(normTxt(o.value)); });
+  // puestos guardados que ya no tiene ningún empleado: se agregan para no perderlos al guardar
+  puestosObligatorio(valor).filter(p => elegidos.has(normTxt(p))).forEach(p => {
+    const o = new Option(p + ' (sin empleados)', p, true, true); o.dataset.extra = '1'; sel.add(o);
+  });
+  document.getElementById('ccTodos').checked = todos;
+  sel.disabled = todos;
+}
+function leerObligatorio(){
+  if(document.getElementById('ccTodos').checked) return '*';
+  return [...document.getElementById('ccPuestos').selectedOptions].map(o => o.value).join('|');
+}
+document.getElementById('ccTodos').addEventListener('change', (e) => { document.getElementById('ccPuestos').disabled = e.target.checked; });
+
 function llenarFormCatalogo(hoja, reg){
   const def = CATALOGO_FORM[hoja];
   Object.entries(def.campos).forEach(([id, campo]) => {
@@ -2166,6 +2265,7 @@ function llenarFormCatalogo(hoja, reg){
     else el.value = reg[campo] ?? '';
   });
   Object.entries(def.datalist).forEach(([id, [campo, cat]]) => { document.getElementById(id).value = textoDatalist(cat, reg[campo]); });
+  if(hoja === 'CatalogoCursos') llenarObligatorio(reg.ObligatorioPara);
   catalogoEditando[hoja] = reg.ID ?? null;
   document.getElementById('btnGuardar' + hoja).textContent = reg.ID != null ? 'Guardar cambios' : 'Agregar';
   document.getElementById('btnCancelar' + hoja).style.display = reg.ID != null ? '' : 'none';
@@ -2175,6 +2275,7 @@ function leerFormCatalogo(hoja){
   Object.entries(def.campos).forEach(([id, campo]) => { reg[campo] = document.getElementById(id).value.trim(); });
   Object.entries(def.datalist).forEach(([id, [campo]]) => { reg[campo] = claveDeDatalistInput(id); });
   if(reg.RFCAgente) reg.RFCAgente = reg.RFCAgente.toUpperCase();
+  if(hoja === 'CatalogoCursos') reg.ObligatorioPara = leerObligatorio();
   if(catalogoEditando[hoja] != null) reg.ID = catalogoEditando[hoja];
   return reg;
 }
@@ -2226,8 +2327,15 @@ function renderCatalogos(){
       <td>${escapeHtml(descCatalogo('areasTematicas', c.AreaTematicaClave))}</td>
       <td>${escapeHtml((agentePorId(c.AgenteID) || {}).Nombre || '—')}</td>
       <td>${c.AplicaSIRCE === 'NO' ? 'No' : 'Sí'}</td>
-      <td>${Number(c.VigenciaMeses) > 0 ? escapeHtml(c.VigenciaMeses) + ' meses' : 'No vence'}</td>${acciones('CatalogoCursos', c.ID)}</tr>`).join('')
-    || vacio(7, 'Sin cursos en el catálogo');
+      <td>${Number(c.VigenciaMeses) > 0 ? escapeHtml(c.VigenciaMeses) + ' meses' : 'No vence'}</td>
+      <td>${textoObligatorio(c.ObligatorioPara)}</td>${acciones('CatalogoCursos', c.ID)}</tr>`).join('')
+    || vacio(8, 'Sin cursos en el catálogo');
+  // puestos para elegir: los del catálogo de empleados (sin repetir mayúsculas/acentos)
+  const sel = document.getElementById('ccPuestos');
+  const elegidos = new Set([...sel.selectedOptions].map(o => normTxt(o.value)));
+  const vistos = new Map();
+  STATE.empleados.forEach(e => { const p = String(e.Puesto || '').trim(); if(p && !vistos.has(normTxt(p))) vistos.set(normTxt(p), p); });
+  sel.innerHTML = [...vistos.values()].sort().map(p => `<option value="${escapeHtml(p)}"${elegidos.has(normTxt(p)) ? ' selected' : ''}>${escapeHtml(p)}</option>`).join('');
   // listas para elegir: en "Registrar curso" el agente se guarda por nombre (así se ve aunque luego se borre del catálogo)
   const nombreCurso = (id) => (cursos.find(c => String(c.ID) === String(id)) || {}).Nombre || id;
   const nombreAgente = (id) => (agentePorId(id) || {}).Nombre || id;
@@ -2267,28 +2375,221 @@ document.getElementById('cCatalogoCurso').addEventListener('change', (e)=>{
 document.getElementById('cAgente').addEventListener('change', (e)=> aplicarAgente(agentePorNombre(e.target.value)));
 ['cFecha', 'cFechaFin'].forEach(id => document.getElementById(id).addEventListener('change', recalcularVencimiento));
 
+// ---------- vez más reciente de cada curso (base de reentrenamiento y cumplimiento) ----------
+const esAlta = (e) => String(e.Estatus).toUpperCase() === 'ALTA';
+// Mismo curso = mismo curso del catálogo, o mismo nombre que uno del catálogo, o mismo nombre entre sí
+function claveCurso(c){
+  if(c.CatalogoCursoID) return 'cat:' + c.CatalogoCursoID;
+  const id = indices().catalogoPorNombre.get(normTxt(c.Nombre));
+  return id != null ? 'cat:' + id : 'nom:' + normTxt(c.Nombre);
+}
+// Por curso: la vez más reciente que el empleado asistió y aprobó (Map clave → curso)
+function ultimasPorCurso(e){
+  const ultimas = new Map();
+  cursosDe(e.ID).filter(p => p.Aprobado !== 'NO').forEach(p => {
+    const c = cursoPorId(p.CursoID);
+    if(!c) return;
+    const clave = claveCurso(c), previa = ultimas.get(clave);
+    if(!previa || String(c.FechaImparticion) > String(previa.FechaImparticion)) ultimas.set(clave, c);
+  });
+  return ultimas;
+}
+const diasParaVencer = (c) => c.TieneVencimiento === 'SI' ? daysUntil(c.FechaVencimiento) : null;
+
 // ---------- reentrenamiento por empleado ----------
-// Por empleado en ALTA y por curso (mismo curso del catálogo o mismo nombre): la vez más reciente que
-// asistió y aprobó. Si esa vez tiene vencimiento y ya venció o vence en ≤ 30 días, se avisa.
+// Por empleado en ALTA y por curso: si la vez más reciente tiene vencimiento y ya venció o vence en ≤ 30 días, se avisa.
 function reentrenamientosPendientes(){
   const out = [];
-  STATE.empleados.filter(e => String(e.Estatus).toUpperCase() === 'ALTA').forEach(e => {
-    const ultimaPorCurso = new Map();
-    cursosDe(e.ID).filter(p => p.Aprobado !== 'NO').forEach(p => {
-      const c = cursoPorId(p.CursoID);
-      if(!c) return;
-      const clave = c.CatalogoCursoID ? 'cat:' + c.CatalogoCursoID : 'nom:' + normTxt(c.Nombre);
-      const previa = ultimaPorCurso.get(clave);
-      if(!previa || String(c.FechaImparticion) > String(previa.FechaImparticion)) ultimaPorCurso.set(clave, c);
-    });
-    ultimaPorCurso.forEach(c => {
-      if(c.TieneVencimiento !== 'SI') return;
-      const dias = daysUntil(c.FechaVencimiento);
+  STATE.empleados.filter(esAlta).forEach(e => {
+    ultimasPorCurso(e).forEach(c => {
+      const dias = diasParaVencer(c);
       if(dias !== null && dias <= 30) out.push({ e, c, dias });
     });
   });
   return out.sort((a, b) => a.dias - b.dias);
 }
+
+// ---------- cursos obligatorios por puesto ----------
+function puestoAplica(cc, puesto){
+  const v = String(cc.ObligatorioPara || '').trim();
+  if(!v) return false;
+  if(v === '*') return true;
+  return puestosObligatorio(v).some(p => normTxt(p) === normTxt(puesto));
+}
+const ESTADOS_OBLIGATORIO = {
+  cumple:    { texto: 'Cumple',     cls: 'badge-ok' },
+  porVencer: { texto: 'Por vencer', cls: 'badge-warn' },
+  vencido:   { texto: 'Vencido',    cls: 'badge-danger' },
+  pendiente: { texto: 'Pendiente',  cls: 'badge-danger' }
+};
+// Cada curso obligatorio que le toca al empleado con su estado; "por vencer" todavía cuenta como cumplido
+function cumplimientoEmpleado(e){
+  const ultimas = ultimasPorCurso(e);
+  return (STATE.catalogoCursos || []).filter(cc => puestoAplica(cc, e.Puesto)).map(cc => {
+    const c = ultimas.get('cat:' + cc.ID);
+    if(!c) return { cc, c: null, estado: 'pendiente', dias: null };
+    const dias = diasParaVencer(c);
+    const estado = dias === null ? 'cumple' : dias < 0 ? 'vencido' : dias <= 30 ? 'porVencer' : 'cumple';
+    return { cc, c, estado, dias };
+  });
+}
+const cuentaComoCumplido = (r) => r.estado === 'cumple' || r.estado === 'porVencer';
+const porcentaje = (cumplidos, total) => total ? Math.round(cumplidos * 100 / total) + '%' : '—';
+const insigniaEstado = (r) => `<span class="badge ${ESTADOS_OBLIGATORIO[r.estado].cls}">${ESTADOS_OBLIGATORIO[r.estado].texto}</span>`;
+
+// Empleados en ALTA con su cumplimiento, según los filtros de la pestaña
+function getCumplimientoFiltrado(){
+  const f = {
+    planta: document.getElementById('filtroCumplPlanta').value,
+    puesto: document.getElementById('filtroCumplPuesto').value,
+    curso: document.getElementById('filtroCumplCurso').value,
+    estado: document.getElementById('filtroCumplEstado').value
+  };
+  return STATE.empleados.filter(esAlta)
+    .filter(e => !f.planta || e.Departamento === f.planta)
+    .filter(e => !f.puesto || normTxt(e.Puesto) === normTxt(f.puesto))
+    .map(e => ({ e, items: cumplimientoEmpleado(e).filter(r => !f.curso || String(r.cc.ID) === f.curso) }))
+    .filter(x => x.items.length)   // a quien no le toca ningún obligatorio no se le mide
+    .filter(x => !f.estado
+      || (f.estado === 'incompletos' ? x.items.some(r => !cuentaComoCumplido(r)) : x.items.some(r => r.estado === f.estado)));
+}
+
+function renderCumplimiento(){
+  const obligatorios = (STATE.catalogoCursos || []).filter(cc => String(cc.ObligatorioPara || '').trim());
+  // listas de filtros
+  const puestos = new Map();
+  STATE.empleados.filter(esAlta).forEach(e => { const p = String(e.Puesto || '').trim(); if(p && !puestos.has(normTxt(p))) puestos.set(normTxt(p), p); });
+  poblarSelect(document.getElementById('filtroCumplPlanta'), Array.from(new Set(STATE.empleados.map(e => e.Departamento).filter(Boolean))).sort());
+  poblarSelect(document.getElementById('filtroCumplPuesto'), [...puestos.values()].sort());
+  poblarSelect(document.getElementById('filtroCumplCurso'), obligatorios.map(cc => String(cc.ID)),
+    id => (obligatorios.find(cc => String(cc.ID) === id) || {}).Nombre || id);
+
+  // indicador del Resumen: todo el personal en ALTA, sin filtros
+  let req = 0, ok = 0;
+  STATE.empleados.filter(esAlta).forEach(e => cumplimientoEmpleado(e).forEach(r => { req++; if(cuentaComoCumplido(r)) ok++; }));
+  document.getElementById('kpiCumplimiento').textContent = porcentaje(ok, req);
+
+  const tbodyE = document.getElementById('tblCumplEmpleados'), tbodyP = document.getElementById('tblCumplPlantas');
+  if(!obligatorios.length){
+    const aviso = '<tr><td colspan="6" class="empty-state">Aún no hay cursos obligatorios. Defínelos en Catálogos → Cursos frecuentes → "Obligatorio para".</td></tr>';
+    tbodyE.innerHTML = aviso; tbodyP.innerHTML = aviso;
+    ['kpiCumplPct','kpiCumplCompletos','kpiCumplPendientes','kpiCumplVencidos'].forEach(id => document.getElementById(id).textContent = '—');
+    return;
+  }
+  const lista = getCumplimientoFiltrado();
+  const todos = lista.flatMap(x => x.items);
+  document.getElementById('kpiCumplPct').textContent = porcentaje(todos.filter(cuentaComoCumplido).length, todos.length);
+  document.getElementById('kpiCumplCompletos').textContent = lista.filter(x => x.items.every(cuentaComoCumplido)).length;
+  document.getElementById('kpiCumplPendientes').textContent = todos.filter(r => r.estado === 'pendiente').length;
+  document.getElementById('kpiCumplVencidos').textContent = todos.filter(r => r.estado === 'vencido').length;
+
+  // por planta
+  const plantas = new Map();
+  lista.forEach(({e, items}) => {
+    const k = e.Departamento || '(sin planta)';
+    const p = plantas.get(k) || { empleados: 0, req: 0, ok: 0 };
+    p.empleados++; p.req += items.length; p.ok += items.filter(cuentaComoCumplido).length;
+    plantas.set(k, p);
+  });
+  tbodyP.innerHTML = [...plantas.entries()].sort().map(([k, p]) => `<tr>
+      <td>${escapeHtml(k)}</td><td>${p.empleados}</td><td>${p.req}</td><td>${p.ok}</td><td><b>${porcentaje(p.ok, p.req)}</b></td></tr>`).join('')
+    || '<tr><td colspan="5" class="empty-state">Nadie coincide con los filtros</td></tr>';
+
+  // por empleado: primero los de menor cumplimiento
+  const pct = (x) => x.items.filter(cuentaComoCumplido).length / x.items.length;
+  tbodyE.innerHTML = lista.slice().sort((a, b) => pct(a) - pct(b) || String(a.e.Nombre).localeCompare(String(b.e.Nombre)))
+    .map(({e, items}) => {
+      const falta = items.filter(r => r.estado !== 'cumple');
+      return `<tr>
+        <td><b>${escapeHtml(e.Nombre)}</b></td><td>${escapeHtml(e.Puesto || '—')}</td><td>${escapeHtml(e.Departamento || '—')}</td>
+        <td><b>${porcentaje(items.filter(cuentaComoCumplido).length, items.length)}</b> <span class="muted">(${items.filter(cuentaComoCumplido).length}/${items.length})</span></td>
+        <td>${falta.length ? falta.map(r => `<span class="badge ${ESTADOS_OBLIGATORIO[r.estado].cls}" style="margin:0 4px 4px 0">${escapeHtml(r.cc.Nombre)} · ${ESTADOS_OBLIGATORIO[r.estado].texto}</span>`).join('')
+              : '<span class="badge badge-ok">✓ Completo</span>'}</td>
+        <td><button class="btn btn-ghost btn-sm" onclick="abrirExpediente(${jsArg(e.ID)})">Expediente</button></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" class="empty-state">Nadie coincide con los filtros</td></tr>';
+}
+['filtroCumplPlanta', 'filtroCumplPuesto', 'filtroCumplCurso', 'filtroCumplEstado']
+  .forEach(id => document.getElementById(id).addEventListener('change', renderCumplimiento));
+document.getElementById('btnLimpiarFiltrosCumpl').addEventListener('click', ()=>{
+  ['filtroCumplPlanta', 'filtroCumplPuesto', 'filtroCumplCurso', 'filtroCumplEstado'].forEach(id => document.getElementById(id).value = '');
+  renderCumplimiento();
+});
+document.getElementById('btnExportCumpl').addEventListener('click', ()=>{
+  const filas = getCumplimientoFiltrado().flatMap(({e, items}) => items.filter(r => r.estado !== 'cumple').map(r => ({
+    'N° Empleado': e.ID, 'Empleado': e.Nombre, 'Puesto': e.Puesto || '', 'Planta / Departamento': e.Departamento || '',
+    'Curso obligatorio': r.cc.Nombre, 'Estado': ESTADOS_OBLIGATORIO[r.estado].texto,
+    'Última vez que lo tomó': r.c ? r.c.FechaImparticion : '', 'Vence': r.c && r.c.TieneVencimiento === 'SI' ? r.c.FechaVencimiento : ''
+  })));
+  if(!filas.length) return toast('No hay pendientes ni vencidos con los filtros actuales');
+  const ws = XLSX.utils.json_to_sheet(filas);
+  ws['!cols'] = [{wch:12},{wch:30},{wch:22},{wch:20},{wch:28},{wch:12},{wch:16},{wch:12}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Pendientes');
+  XLSX.writeFile(wb, nombreArchivoFecha('Cumplimiento_obligatorios'));
+});
+
+// ---------- expediente por empleado ----------
+const resultadoParticipacion = (p) => !asistio(p) ? 'Faltó' : p.Aprobado === 'NO' ? 'No aprobó' : 'Aprobó';
+// paraImprimir: sin botones ni colores, con datos de la empresa y línea de firma
+function htmlExpediente(e, paraImprimir){
+  const parts = (indices().todasPorEmpleado.get(idKey(e.ID)) || []).map(p => ({ p, c: cursoPorId(p.CursoID) || {} }))
+    .sort((a, b) => String(b.c.FechaImparticion || b.p.FechaImparticion).localeCompare(String(a.c.FechaImparticion || a.p.FechaImparticion)));
+  const tomados = parts.filter(x => asistio(x.p));
+  const horas = tomados.reduce((s, x) => s + (Number(x.p.DuracionHoras) || 0), 0);
+  const oblig = cumplimientoEmpleado(e);
+  const estado = (r) => paraImprimir ? ESTADOS_OBLIGATORIO[r.estado].texto : insigniaEstado(r);
+  const resultado = (x) => {
+    const t = resultadoParticipacion(x.p);
+    return paraImprimir ? t : `<span class="badge ${t === 'Aprobó' ? 'badge-ok' : t === 'Faltó' ? 'badge-warn' : 'badge-danger'}">${t}</span>`;
+  };
+  const dato = (et, v) => `<div><span class="muted" style="font-size:11.5px">${et}</span><br><b>${escapeHtml(v || '—')}</b></div>`;
+  const cfg = STATE.config || {};
+  return `<div class="${paraImprimir ? 'dc3 expediente' : ''}">
+    ${paraImprimir ? `<div class="dc3-titulo">HISTORIAL DE CAPACITACIÓN DEL TRABAJADOR<small>${escapeHtml(cfg.RazonSocial || '')} ${cfg.RFCEmpresa ? '· RFC ' + escapeHtml(cfg.RFCEmpresa) : ''} · Emitido el ${fmtDate(hoyISO())}</small></div>`
+                   : `<h2 style="margin-top:0">📁 Expediente de ${escapeHtml(e.Nombre)}</h2>`}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
+      ${dato('N° de empleado', e.ID)}${dato('Puesto', e.Puesto)}${dato('Planta / Departamento', e.Departamento)}${dato('Estatus', e.Estatus)}
+      ${dato('Fecha de alta', e.FechaAlta ? fmtDate(e.FechaAlta) : '')}${dato('CURP', e.CURP)}${dato('Escolaridad', e.Escolaridad)}
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:14px">
+      ${dato('Cursos tomados', String(tomados.length))}${dato('Horas de capacitación', horas.toFixed(1).replace(/\.0$/, ''))}
+      ${dato('Faltas', String(parts.length - tomados.length))}${dato('No aprobó', String(tomados.filter(x => x.p.Aprobado === 'NO').length))}
+      ${dato('Cumplimiento de obligatorios', porcentaje(oblig.filter(cuentaComoCumplido).length, oblig.length))}
+    </div>
+    <h3 style="font-size:14px;margin:10px 0 6px">Cursos obligatorios de su puesto</h3>
+    <table><thead><tr><th>Curso</th><th>Estado</th><th>Última vez</th><th>Vence</th></tr></thead><tbody>
+      ${oblig.map(r => `<tr><td>${escapeHtml(r.cc.Nombre)}</td><td>${estado(r)}</td>
+          <td>${r.c ? fmtPeriodo(r.c) : '—'}</td><td>${r.c && r.c.TieneVencimiento === 'SI' ? fmtDate(r.c.FechaVencimiento) : '—'}</td></tr>`).join('')
+        || '<tr><td colspan="4">Su puesto no tiene cursos obligatorios definidos.</td></tr>'}
+    </tbody></table>
+    <h3 style="font-size:14px;margin:14px 0 6px">Historial de cursos</h3>
+    <table><thead><tr><th>Periodo</th><th>Curso</th><th>Horas</th><th>Resultado</th><th>Vence</th>${paraImprimir ? '' : '<th></th>'}</tr></thead><tbody>
+      ${parts.map(x => `<tr>
+          <td style="white-space:nowrap">${x.c.ID != null ? fmtPeriodo(x.c) : fmtDate(x.p.FechaImparticion)}</td>
+          <td>${escapeHtml(x.c.Nombre || x.p.CursoNombre)}</td><td>${escapeHtml(x.p.DuracionHoras)}</td><td>${resultado(x)}</td>
+          <td>${x.c.TieneVencimiento === 'SI' ? fmtDate(x.c.FechaVencimiento) : '—'}</td>
+          ${paraImprimir ? '' : `<td>${resultadoParticipacion(x.p) === 'Aprobó' && x.c.ID != null
+              ? `<button class="btn btn-ghost btn-sm" onclick="generarDC3(${jsArg(x.c.ID)}, ${jsArg(e.ID)})">🖨 DC-3</button>` : ''}</td>`}
+        </tr>`).join('') || `<tr><td colspan="${paraImprimir ? 5 : 6}">Sin cursos registrados.</td></tr>`}
+    </tbody></table>
+    ${paraImprimir ? `<div class="dc3-firmas"><div>${escapeHtml(cfg.RepresentanteLegal || '')}<br>Patrón o representante legal<br>Nombre y firma</div>
+                      <div>${escapeHtml(e.Nombre)}<br>Trabajador<br>Nombre y firma</div></div>` : ''}
+  </div>`;
+}
+let expedienteId = null;
+function abrirExpediente(id){
+  const e = empleadoPorId(id);
+  if(!e) return toast('No se encontró ese empleado', true);
+  expedienteId = e.ID;
+  document.getElementById('expedienteContenido').innerHTML = htmlExpediente(e, false);
+  document.getElementById('expedienteOverlay').classList.remove('hidden');
+}
+document.getElementById('btnCerrarExpediente').addEventListener('click', () => document.getElementById('expedienteOverlay').classList.add('hidden'));
+document.getElementById('btnImprimirExpediente').addEventListener('click', () => {
+  const e = empleadoPorId(expedienteId);
+  if(e) imprimir(htmlExpediente(e, true));
+});
 function renderReentrenamiento(){
   const lista = reentrenamientosPendientes();
   document.getElementById('reentrenamientoCuenta').textContent = lista.length ? `(${lista.length})` : '';
@@ -2345,15 +2646,17 @@ function htmlDC3(e, c, cfg){
 }
 
 // Una DC-3 por participante que asistió y aprobó (LFT art. 153-V). Avisa qué falta antes de imprimir.
-function generarDC3(cursoId){
+// soloEmpleadoId (opcional): solo la constancia de esa persona (desde su expediente)
+function generarDC3(cursoId, soloEmpleadoId){
   const c = cursoPorId(cursoId);
   if(!c) return toast('Ese curso ya no existe. Recarga la página.', true);
   const cfg = STATE.config || {};
   const faltaEmpresa = [['RazonSocial','razón social'], ['RFCEmpresa','RFC de la empresa'], ['RepresentanteLegal','representante legal'],
     ['RepresentanteTrabajadores','representante de los trabajadores']].filter(([k]) => !String(cfg[k] || '').trim()).map(([, t]) => t);
   if(faltaEmpresa.length) return toast('Para las DC-3 falta en ⚙️ Configuración: ' + faltaEmpresa.join(', '), true);
-  const aprobados = participantesDe(cursoId).filter(p => asistio(p) && p.Aprobado !== 'NO');
-  if(!aprobados.length) return toast('Este curso no tiene participantes que asistieron y aprobaron', true);
+  const aprobados = participantesDe(cursoId).filter(p => asistio(p) && p.Aprobado !== 'NO'
+    && (soloEmpleadoId == null || idKey(p.EmpleadoID) === idKey(soloEmpleadoId)));
+  if(!aprobados.length) return toast('No hay participantes que asistieran y aprobaran este curso', true);
 
   const avisos = [];
   const faltaCurso = [[c.AreaTematicaClave, 'área temática'], [c.Instructor, 'instructor'], [Number(c.DuracionHoras) > 0, 'duración']]
@@ -2369,12 +2672,16 @@ function generarDC3(cursoId){
   if(avisos.length && !confirm('Faltan datos en algunas constancias:\n\n• ' + avisos.slice(0, 15).join('\n• ') +
     (avisos.length > 15 ? `\n… y ${avisos.length - 15} más` : '') + '\n\n¿Imprimir de todos modos?')) return;
 
-  document.getElementById('areaImpresion').innerHTML = empleados.map(e => htmlDC3(e, c, cfg)).join('');
-  document.body.classList.add('imprimiendo-dc3');
-  window.print();   // desde el diálogo de impresión se puede "Guardar como PDF"
+  imprimir(empleados.map(e => htmlDC3(e, c, cfg)).join(''));
+}
+// Imprime solo este contenido (DC-3 o expediente); desde el diálogo se puede "Guardar como PDF"
+function imprimir(html){
+  document.getElementById('areaImpresion').innerHTML = html;
+  document.body.classList.add('imprimiendo');
+  window.print();
 }
 window.addEventListener('afterprint', () => {
-  document.body.classList.remove('imprimiendo-dc3');
+  document.body.classList.remove('imprimiendo');
   document.getElementById('areaImpresion').innerHTML = '';
 });
 
@@ -2984,6 +3291,10 @@ function autoprueba(){
     [esEnlaceWeb('javascript:alert(1)'), false],
     [sumarMeses('2026-01-31', 1), '2026-02-28'],
     [sumarMeses('2026-10-03', 12), '2027-10-03'],
+    [puestoAplica({ObligatorioPara:'*'}, 'CUALQUIERA'), true],
+    [puestoAplica({ObligatorioPara:'Operador de Máquina|ALMACENISTA'}, ' OPERADOR DE MAQUINA '), true],
+    [puestoAplica({ObligatorioPara:'ALMACENISTA'}, 'OPERADOR'), false],
+    [puestoAplica({ObligatorioPara:''}, 'OPERADOR'), false],
     [jsArg(`x');alert(1);//`), '&quot;x&#39;);alert(1);//&quot;'],
     [idKey('001234'), idKey(1234)],
     [fechaDeCelda(46235), '2026-08-01'],
