@@ -216,6 +216,28 @@
   .dc3 .dc3-firmas{display:flex;gap:16px;margin-top:40px;text-align:center;font-size:8.5pt;}
   .dc3 .dc3-firmas div{flex:1;border-top:1px solid #000;padding-top:4px;}
   .dc3 .dc3-protesta{font-size:8pt;text-align:center;margin-top:10px;}
+  /* DC-3: réplica del formato de la STPS */
+  .dc3-formato{font-size:8.5pt;}
+  .dc3-formato .dc3-logo{height:15mm;}
+  .dc3-formato .dc3-titulo{font-size:11pt;line-height:1.25;}
+  .dc3-formato table{margin-bottom:6px;}
+  .dc3-formato td{padding:2px 5px 4px;}
+  .dc3-formato sup{font-size:6pt;}
+  .dc3-formato .caja{vertical-align:bottom;}   /* una casilla vacía no debe quedar más abajo que las llenas */
+  .dc3-grupo{display:inline-flex;flex-direction:column;align-items:center;margin-right:6px;vertical-align:bottom;}
+  .dc3-grupo-et{font-size:7pt;}
+  .dc3-periodo{display:flex;align-items:flex-end;gap:2px;}
+  .dc3-periodo .dc3-et{margin-right:6px;}
+  .dc3-de{font-size:8pt;margin:0 6px 2px;}
+  .dc3-guion{display:inline-block;margin:0 4px;font-weight:700;}
+  .dc3-caja-firmas{border:1px solid #000;padding:8px 12px 6px;}
+  .dc3-formato .dc3-protesta{font-weight:700;font-size:8.5pt;margin:0 auto 10px;max-width:88%;}
+  .dc3-firmas3{display:flex;gap:22px;text-align:center;font-size:8.5pt;}
+  .dc3-firmas3 > div{flex:1;}
+  .dc3-firma-nom{min-height:30px;display:flex;align-items:flex-end;justify-content:center;font-weight:700;}
+  .dc3-firma-linea{border-top:1px solid #000;padding-top:2px;}
+  .dc3-instrucciones{font-size:7pt;margin-top:8px;line-height:1.35;}
+  .dc3-pie{text-align:right;font-size:8pt;}
 </style>
 </head>
 <body>
@@ -2603,44 +2625,69 @@ function renderReentrenamiento(){
 }
 
 // ---------- constancias DC-3 ----------
-// Diseño basado en el formato DC-3 de la STPS: compararlo una vez con el formato oficial vigente antes de usarlo.
+// Réplica del formato DC-3 de la STPS (anverso) que usa la empresa: mismas secciones, casillas,
+// llamadas ¹ a ⁵ e instrucciones. El catálogo del reverso no se imprime.
 function htmlDC3(e, c, cfg){
   const val = (v) => `<span class="dc3-val">${escapeHtml(v || '')}</span>`;
-  const cajas = (txt, n) => Array.from({length: n}, (_, i) => `<span class="caja">${escapeHtml(String(txt || '').toUpperCase()[i] || '')}</span>`).join('');
+  const cajas = (txt, n) => Array.from({length: n}, (_, i) => `<span class="caja">${escapeHtml(String(txt ?? '').toUpperCase()[i] || '')}</span>`).join('');
+  // grupo de casillas con su encabezado arriba (Año / Mes / Día)
+  const grupo = (et, txt, n) => `<span class="dc3-grupo"><span class="dc3-grupo-et">${et}</span><span>${cajas(txt, n)}</span></span>`;
   const fecha = (iso) => {
     const d = parseFechaLocal(iso);
-    return d ? `${cajas(String(d.getFullYear()), 4)} ${cajas(String(d.getMonth()+1).padStart(2,'0'), 2)} ${cajas(String(d.getDate()).padStart(2,'0'), 2)}`
-             : `${cajas('', 4)} ${cajas('', 2)} ${cajas('', 2)}`;
+    return grupo('Año', d ? String(d.getFullYear()) : '', 4) + grupo('Mes', d ? String(d.getMonth()+1).padStart(2,'0') : '', 2)
+         + grupo('Día', d ? String(d.getDate()).padStart(2,'0') : '', 2);
   };
+  // RFC en casillas 4 - 6 - 3; una persona moral (12 caracteres) deja vacía la primera casilla
+  const rfc = String(cfg.RFCEmpresa || '').toUpperCase().trim();
+  const rfc13 = rfc.length === 12 ? ' ' + rfc : rfc;
+  const sep = '<span class="dc3-guion">-</span>';
   const nombre = [e.ApellidoPaterno, e.ApellidoMaterno, e.NombrePila].filter(Boolean).join(' ') || e.Nombre;
-  return `<div class="dc3">
+  const firma = (nombreFirma, titulo) => `<div><div class="dc3-firma-tit">${titulo}</div>
+      <div class="dc3-firma-nom">${escapeHtml(nombreFirma || '')}</div><div class="dc3-firma-linea">Nombre y firma</div></div>`;
+  return `<div class="dc3 dc3-formato">
+    <div class="dc3-logo"><!-- espacio para el logotipo de la empresa o del agente capacitador (hoja membretada) --></div>
     <div class="dc3-titulo">FORMATO DC-3<br>CONSTANCIA DE COMPETENCIAS O DE HABILIDADES LABORALES</div>
     <table>
       <tr><th colspan="2">DATOS DEL TRABAJADOR</th></tr>
-      <tr><td colspan="2"><span class="dc3-et">Nombre (anotar apellido paterno, apellido materno y nombre (s))</span>${val(nombre)}</td></tr>
-      <tr><td style="width:50%"><span class="dc3-et">Clave Única de Registro de Población</span>${cajas(e.CURP, 18)}</td>
-          <td><span class="dc3-et">Ocupación específica (Catálogo Nacional de Ocupaciones)</span>${val(e.OcupacionClave ? textoDatalist('ocupaciones', e.OcupacionClave) : '')}</td></tr>
-      <tr><td colspan="2"><span class="dc3-et">Puesto</span>${val(e.Puesto)}</td></tr>
+      <tr><td colspan="2"><span class="dc3-et">Nombre (Anotar apellido paterno, apellido materno y nombre (s))</span>${val(nombre)}</td></tr>
+      <tr><td style="width:58%"><span class="dc3-et">Clave Única de Registro de Población</span>${cajas(e.CURP, 18)}</td>
+          <td><span class="dc3-et">Ocupación específica (Catálogo Nacional de Ocupaciones) <sup>1</sup></span>${val(e.OcupacionClave ? textoDatalist('ocupaciones', e.OcupacionClave) : '')}</td></tr>
+      <tr><td colspan="2"><span class="dc3-et">Puesto*</span>${val(e.Puesto)}</td></tr>
     </table>
     <table>
       <tr><th>DATOS DE LA EMPRESA</th></tr>
-      <tr><td><span class="dc3-et">Nombre o razón social (en caso de persona física, anotar apellido paterno, apellido materno y nombre(s))</span>${val(cfg.RazonSocial)}</td></tr>
-      <tr><td><span class="dc3-et">Registro Federal de Contribuyentes con homoclave (SHCP)</span>${val(cfg.RFCEmpresa)}</td></tr>
+      <tr><td><span class="dc3-et">Nombre o razón social (En caso de persona física, anotar apellido paterno, apellido materno y nombre(s))</span>${val(cfg.RazonSocial)}</td></tr>
+      <tr><td><span class="dc3-et">Registro Federal de Contribuyentes con homoclave (SHCP)</span>
+          ${cajas(rfc13.slice(0, 4), 4)}${sep}${cajas(rfc13.slice(4, 10), 6)}${sep}${cajas(rfc13.slice(10, 13), 3)}</td></tr>
     </table>
     <table>
       <tr><th colspan="2">DATOS DEL PROGRAMA DE CAPACITACIÓN, ADIESTRAMIENTO Y PRODUCTIVIDAD</th></tr>
       <tr><td colspan="2"><span class="dc3-et">Nombre del curso</span>${val(c.Nombre)}</td></tr>
-      <tr><td style="width:30%"><span class="dc3-et">Duración en horas</span>${val(c.DuracionHoras)}</td>
-          <td><span class="dc3-et">Periodo de ejecución: de (año / mes / día) a (año / mes / día)</span>
-            De ${fecha(c.FechaImparticion)} &nbsp; a ${fecha(c.FechaTermino || c.FechaImparticion)}</td></tr>
-      <tr><td colspan="2"><span class="dc3-et">Área temática del curso</span>${val(c.AreaTematicaClave ? textoDatalist('areasTematicas', c.AreaTematicaClave) : '')}</td></tr>
-      <tr><td colspan="2"><span class="dc3-et">Nombre del agente capacitador o STPS</span>${val(c.AgenteNombre || c.Instructor)}</td></tr>
+      <tr><td style="width:22%"><span class="dc3-et">Duración en horas</span>${val(c.DuracionHoras)}</td>
+          <td><span class="dc3-periodo"><span class="dc3-et">Periodo de<br>ejecución:</span><span class="dc3-de">De</span>
+            ${fecha(c.FechaImparticion)}<span class="dc3-de">a</span>${fecha(c.FechaTermino || c.FechaImparticion)}</span></td></tr>
+      <tr><td colspan="2"><span class="dc3-et">Área temática del curso <sup>2</sup></span>${val(c.AreaTematicaClave ? textoDatalist('areasTematicas', c.AreaTematicaClave) : '')}</td></tr>
+      <tr><td colspan="2"><span class="dc3-et">Nombre del agente capacitador o STPS <sup>3</sup></span>${val(c.AgenteNombre || c.Instructor)}</td></tr>
     </table>
-    <div class="dc3-protesta">Los datos se asientan en esta constancia bajo protesta de decir verdad, apercibidos de la responsabilidad en que incurre todo aquel que no se conduce con verdad.</div>
-    <div class="dc3-firmas">
-      <div>${escapeHtml(c.Instructor || '')}<br>Instructor o tutor<br>Nombre y firma</div>
-      <div>${escapeHtml(cfg.RepresentanteLegal || '')}<br>Patrón o representante legal<br>Nombre y firma</div>
-      <div>${escapeHtml(cfg.RepresentanteTrabajadores || '')}<br>Representante de los trabajadores<br>Nombre y firma</div>
+    <div class="dc3-caja-firmas">
+      <div class="dc3-protesta">Los datos se asientan en esta constancia bajo protesta de decir verdad, apercibidos de la responsabilidad en que incurre todo aquel que no se conduce con verdad.</div>
+      <div class="dc3-firmas3">
+        ${firma(c.Instructor, 'Instructor o tutor')}
+        ${firma(cfg.RepresentanteLegal, 'Patrón o representante legal <sup>4</sup>')}
+        ${firma(cfg.RepresentanteTrabajadores, 'Representante de los trabajadores <sup>5</sup>')}
+      </div>
+    </div>
+    <div class="dc3-instrucciones">
+      <b>INSTRUCCIONES</b><br>
+      - Llenar a máquina o con letra de molde.<br>
+      - Deberá entregarse al trabajador dentro de los veinte días hábiles siguientes al término del curso de capacitación aprobado.<br>
+      <sup>1</sup> Las áreas y subáreas ocupacionales del Catálogo Nacional de Ocupaciones se encuentran disponibles en el reverso de este formato y en la página www.stps.gob.mx<br>
+      <sup>2</sup> Las áreas temáticas de los cursos se encuentran disponibles en el reverso de este formato y en la página www.stps.gob.mx<br>
+      <sup>3</sup> Cursos impartidos por el área competente de la Secretaría del Trabajo y Previsión Social.<br>
+      <sup>4</sup> Para empresas con menos de 51 trabajadores. Para empresas con más de 50 trabajadores firmará el representante del patrón ante la Comisión mixta de capacitación, adiestramiento y productividad.<br>
+      <sup>5</sup> Solo para empresas con más de 50 trabajadores.<br>
+      * Dato no obligatorio.
+      <div class="dc3-pie">DC-3</div>
     </div>
   </div>`;
 }
